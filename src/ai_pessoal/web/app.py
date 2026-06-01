@@ -11,13 +11,14 @@ from ai_pessoal.capture import list_captures, parse_capture_line, save_capture, 
 from ai_pessoal.chat import run_chat
 from ai_pessoal.config import load_config
 from ai_pessoal.memory import format_who_am_i
+from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import format_related_markdown, gather_related
 from ai_pessoal.ollama_client import OllamaError, health_check
 from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.3.0")
+app = FastAPI(title="AI-Pessoal", version="0.4.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -127,15 +128,33 @@ def api_related(
     }
 
 
+@app.get("/api/recover")
+def api_recover(q: str = "", limit: int = 15):
+    _, data_dir = load_config()
+    entries, intent = retrieve_for_query(data_dir, q, limit=min(limit, 50))
+    return {
+        "markdown": format_retrieval_markdown(entries, intent),
+        "items": [
+            {
+                "id": e.id,
+                "type": e.type_label,
+                "body": e.body,
+                "created": e.created.isoformat(),
+            }
+            for e in entries
+        ],
+    }
+
+
 @app.post("/api/chat")
 def api_chat(body: ChatIn):
     cfg, data_dir = load_config()
     session = start_session(data_dir)
     try:
-        reply = run_chat(cfg, data_dir, session, body.message.strip())
+        reply, sources = run_chat(cfg, data_dir, session, body.message.strip())
     except OllamaError as e:
         raise HTTPException(503, str(e)) from e
-    return {"reply": reply, "session_id": session.session_id}
+    return {"reply": reply, "session_id": session.session_id, "sources": sources}
 
 
 def main() -> None:

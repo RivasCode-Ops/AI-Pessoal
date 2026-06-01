@@ -3,17 +3,28 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ai_pessoal.memory import build_memory_context, build_relevant_context
+from ai_pessoal.memory import build_memory_context
+from ai_pessoal.recover import RetrievalIntent, format_context_block, retrieve_for_query
+from ai_pessoal.capture import CaptureEntry
 from ai_pessoal.ollama_client import OllamaError, chat, health_check
 from ai_pessoal.session import ChatSession
 
 
-def compose_system_prompt(base: str, data_dir: Path, user_query: str) -> str:
+def compose_system_prompt(
+    base: str,
+    data_dir: Path,
+    user_query: str,
+    *,
+    entries: list[CaptureEntry] | None = None,
+    intent: RetrievalIntent | None = None,
+) -> str:
     blocks = [base.strip()]
     mem = build_memory_context(data_dir)
     if mem:
         blocks.append(mem)
-    rel = build_relevant_context(data_dir, user_query)
+    if entries is None:
+        entries, intent = retrieve_for_query(data_dir, user_query, limit=8)
+    rel = format_context_block(entries, intent)
     if rel:
         blocks.append(rel)
     blocks.append(
@@ -28,7 +39,7 @@ def run_chat(
     data_dir: Path,
     session: ChatSession,
     user_text: str,
-) -> str:
+) -> tuple[str, list[dict[str, str]]]:
     ollama = cfg["ollama"]
     chat_cfg = cfg["chat"]
     base = str(ollama["base_url"])
@@ -43,11 +54,18 @@ def run_chat(
             "Ollama não está acessível. Inicie com 'ollama serve' ou ajuste config.json."
         )
 
-    system = compose_system_prompt(base_system, data_dir, user_text)
+    entries, intent = retrieve_for_query(data_dir, user_text, limit=8)
+    system = compose_system_prompt(
+        base_system, data_dir, user_text, entries=entries, intent=intent
+    )
     session.append("user", user_text)
     messages = [{"role": "system", "content": system}]
     messages.extend(session.recent_for_api(max_hist))
 
     reply = chat(base, model, messages, temperature=temp, timeout=timeout)
     session.append("assistant", reply)
-    return reply
+    source_items = [
+        {"id": e.id, "type": e.type_label, "body": e.body[:200]}
+        for e in entries
+    ]
+    return reply, source_items

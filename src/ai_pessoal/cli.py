@@ -8,6 +8,7 @@ from rich.panel import Panel
 
 from ai_pessoal import __version__
 from ai_pessoal.capture import capture_dir, list_captures, parse_capture_line, save_capture, search_captures
+from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import add_link, format_related_markdown, gather_related
 from ai_pessoal.chat import run_chat
 from ai_pessoal.config import load_config
@@ -20,6 +21,7 @@ console = Console()
 _SEARCH_RE = re.compile(r"^buscar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _PROJETO_BUSCA_RE = re.compile(r"^projeto\s*:\s*(.+)$", re.IGNORECASE)
 _RELACIONADOS_RE = re.compile(r"^relacionados\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+_RECUPERAR_RE = re.compile(r"^recuperar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 
 
 def _help_text() -> str:
@@ -36,9 +38,15 @@ def _help_text() -> str:
     aprendi: vídeo converte melhor
     Fonte: campanha jun/2026
 
+[bold]Recuperar[/] (sem IA — só o acervo)
+  recuperar: marketing
+  por que decidi sair da empresa
+  o que aprendi sobre vendas
+  o que anotei sobre cliente X
+
 [bold]Conversa[/]
   ? pergunta
-  ou texto livre (usa memória + trechos relevantes)
+  ou texto livre (memória + trechos anexados à resposta)
 
 [bold]Perfil[/]
   quem sou eu?
@@ -211,15 +219,32 @@ def _is_who_am_i(text: str) -> bool:
     )
 
 
+def _cmd_recuperar(data_dir, query: str) -> None:
+    q = query.strip()
+    if not q:
+        console.print("[yellow]Ex.: recuperar: marketing · por que decidi X[/]")
+        return
+    entries, intent = retrieve_for_query(data_dir, q)
+    console.print(Markdown(format_retrieval_markdown(entries, intent)))
+    console.print()
+
+
 def _run_chat_ui(cfg, data_dir, session, user_text: str) -> None:
     with console.status("[bold cyan]Pensando…[/]"):
         try:
-            reply = run_chat(cfg, data_dir, session, user_text)
+            reply, sources = run_chat(cfg, data_dir, session, user_text)
         except OllamaError as e:
             console.print(f"[red]{e}[/]")
             return
     console.print()
     console.print(Markdown(reply))
+    if sources:
+        console.print("[dim]Baseado em:[/]")
+        for s in sources[:6]:
+            body = s["body"].replace("\n", " ")
+            if len(body) > 55:
+                body = body[:52] + "…"
+            console.print(f"  [dim]·[/] [{s['type']}] {body} [dim]({s['id']})[/]")
     console.print()
 
 
@@ -315,6 +340,15 @@ def main() -> None:
         m_rel = _RELACIONADOS_RE.match(line)
         if m_rel:
             _cmd_relacionados(data_dir, m_rel.group(1))
+            continue
+
+        m_rec = _RECUPERAR_RE.match(line)
+        if m_rec:
+            _cmd_recuperar(data_dir, m_rec.group(1))
+            continue
+
+        if low.startswith("!recuperar"):
+            _cmd_recuperar(data_dir, line[10:])
             continue
 
         m_search = _SEARCH_RE.match(line)

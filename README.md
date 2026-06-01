@@ -45,6 +45,8 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 | `quem sou eu?` | Perfil só do registrado |
 | `!memoria` / `!projetos` | Fatos, prefs, projetos |
 | `projeto: Revigor` | Busca por projeto |
+| `recuperar: termo` | Acervo sem IA (ou `!recuperar`) |
+| `?por que decidi X` | Conversa com decisões no contexto |
 | `relacionados: Revigor` | Conexões (projeto + links + ref:) |
 | `!liga id1 id2` | Liga duas capturas |
 | `ref: id` na captura | Vincula à entrada existente |
@@ -52,4 +54,6 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Estado
 
-**v0.3.0** — Fase **Relacionar**: links entre capturas, grafo por projeto, `relacionados:` na CLI e web.
+**v0.4.0** — **Recuperar** maduro: consultas por intenção (`por que decidi…`, `o que aprendi…`), `recuperar:`, trechos citados no chat (CLI + web).
+
+**v0.3.0** — Relacionar: links, `relacionados:`, grafo por projeto.

@@ -33,11 +33,17 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - Mesmo `projeto:` no frontmatter
 - Contexto de conversa inclui conexões
 
-## v1.1 (prioridade alta, logo após MVP)
+## Recuperar ✅ (v0.4.0)
 
-- Decisões e aprendizados maduros
-- Projetos como filtro em tudo
-- Anexar trechos recuperados à conversa
+- Intenção: `por que decidi…`, `o que aprendi…`, `o que anotei…`
+- `recuperar:` / `!recuperar` (sem IA)
+- Motivo / Risco / Fonte no contexto do chat
+- Fontes citadas após resposta (CLI + web)
+
+## v1.1 (restante)
+
+- Projetos como filtro global (projeto ativo em config)
+- Refinar ranking de relevância
 
 ## v2
 

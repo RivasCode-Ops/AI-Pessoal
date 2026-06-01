@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ai_pessoal.capture import CaptureEntry, list_captures, search_captures
-from ai_pessoal.relate import gather_related
+from ai_pessoal.capture import CaptureEntry, list_captures
+from ai_pessoal.recover import format_context_block, retrieve_for_query
 
 PROFILE_TYPES = ("fato", "pref", "projeto")
 CONTEXT_TYPES = ("fato", "pref", "projeto", "decisao", "aprendi", "nota", "ideia")
@@ -65,15 +65,9 @@ def build_memory_context(data_dir: Path, *, max_items: int = 15) -> str:
 
 
 def build_relevant_context(data_dir: Path, query: str, *, max_items: int = 8) -> str:
-    """Trechos recuperados + conexões (mesmo projeto / links) para a pergunta."""
-    hits = gather_related(data_dir, query=query, limit=max_items)
-    if not hits:
-        return ""
-    lines = ["Trechos e conexões do seu acervo:"]
-    for e in hits:
-        line = _format_entry_line(e)
-        lines.append(f"{line} (id: {e.id})")
-    return "\n".join(lines)
+    """Trechos recuperados (intenção + busca + conexões) para a pergunta."""
+    hits, intent = retrieve_for_query(data_dir, query, limit=max_items)
+    return format_context_block(hits, intent)
 
 
 def list_projects(data_dir: Path) -> list[str]:

@@ -61,7 +61,15 @@ el("btnChat").onclick = async () => {
   addBubble("user", message);
   try {
     const r = await api("/api/chat", { method: "POST", body: JSON.stringify({ message }) });
-    addBubble("assistant", r.reply);
+    let text = r.reply;
+    if (r.sources?.length) {
+      const refs = r.sources
+        .slice(0, 4)
+        .map((s) => `[${s.type}] ${s.body.slice(0, 50)}…`)
+        .join(" · ");
+      text += `\n\n— Baseado em: ${refs}`;
+    }
+    addBubble("assistant", text);
   } catch (e) {
     addBubble("assistant", `Erro: ${e.message}`);
   }
