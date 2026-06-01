@@ -26,7 +26,15 @@
   "features": {
     "long_term_memory": true,
     "semantic_search": true,
+    "cortana_bridge": false,
     "reminders": false
+  },
+  "cortana": {
+    "enabled": false,
+    "base_url": "http://127.0.0.1:8787",
+    "poll_seconds": 3,
+    "timeout_seconds": 600,
+    "default_output_type": "summary"
   },
   "semantic": {
     "embed_model": "nomic-embed-text",

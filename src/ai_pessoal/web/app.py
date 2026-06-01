@@ -18,6 +18,12 @@ from ai_pessoal.config import (
 )
 from ai_pessoal.documents import index_all_documents, list_document_sources
 from ai_pessoal.session_index import index_all_sessions
+from ai_pessoal.cortana_bridge import (
+    CortanaError,
+    health_check as cortana_health,
+    import_existing_search,
+    is_cortana_enabled,
+)
 from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
@@ -27,7 +33,7 @@ from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.8.0")
+app = FastAPI(title="AI-Pessoal", version="0.9.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -44,6 +50,10 @@ class ChatIn(BaseModel):
 
 class ActiveProjectIn(BaseModel):
     name: str | None = None
+
+
+class CortanaImportIn(BaseModel):
+    search_id: str = Field(..., min_length=8)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -66,6 +76,8 @@ def api_health():
         "active_project": get_active_project(cfg),
         "semantic_search": is_semantic_enabled(cfg),
         "embed_model": cfg.get("semantic", {}).get("embed_model", "nomic-embed-text"),
+        "cortana_bridge": is_cortana_enabled(cfg),
+        "cortana_ok": cortana_health(cfg) if is_cortana_enabled(cfg) else False,
     }
 
 
@@ -283,6 +295,18 @@ def api_semantic_search(q: str = "", limit: int = 15):
         }
         for s in hits
     ]
+
+
+@app.post("/api/cortana/import")
+def api_cortana_import(body: CortanaImportIn):
+    cfg, data_dir = load_config()
+    if not is_cortana_enabled(cfg):
+        raise HTTPException(400, "cortana_bridge desativado em config.json")
+    try:
+        entry = import_existing_search(data_dir, cfg, body.search_id.strip())
+    except CortanaError as e:
+        raise HTTPException(503, str(e)) from e
+    return {"ok": True, "id": entry.id, "type": entry.type_label}
 
 
 @app.post("/api/chat")

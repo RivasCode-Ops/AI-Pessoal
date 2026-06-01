@@ -28,6 +28,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "features": {
         "long_term_memory": False,
         "semantic_search": False,
+        "cortana_bridge": False,
         "reminders": False,
     },
     "context": {
@@ -42,11 +43,30 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "chunk_chars": 900,
         "chunk_overlap": 120,
     },
+    "cortana": {
+        "enabled": False,
+        "base_url": "http://127.0.0.1:8787",
+        "poll_seconds": 3,
+        "timeout_seconds": 600,
+        "default_output_type": "summary",
+    },
 }
 
 
 def is_semantic_enabled(cfg: dict[str, Any]) -> bool:
     return bool(cfg.get("features", {}).get("semantic_search", False))
+
+
+def set_cortana_bridge(data_dir: Path, enabled: bool) -> dict[str, Any]:
+    config_path = data_dir / "config.json"
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    cfg.setdefault("features", {})["cortana_bridge"] = enabled
+    cfg.setdefault("cortana", {})["enabled"] = enabled
+    config_path.write_text(
+        json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return cfg
 
 
 def set_semantic_search(data_dir: Path, enabled: bool) -> dict[str, Any]:

@@ -171,7 +171,7 @@ Fonte: `docs/ROADMAP.md` no repo (atualizar após cada release).
 | Readability + export MD | ✅ V1.2 |
 | CI / testes automatizados | ❌ → V1.3 |
 | Modos rápido / balanceado / profundo | 📋 V1.3 |
-| Integração AI-Pessoal | 📋 V2+ |
+| Integração AI-Pessoal | ✅ ponte v0.9 (`cortana:` no AI-Pessoal) |
 
 **Maturidade (estimativa do roadmap):** ~6,5/10 uso pessoal · ~4,5/10 produto comercial.
 
@@ -253,22 +253,21 @@ Regras herdadas:
 
 ---
 
-## 14. Integração futura com AI-Pessoal (V2 ecossistema)
+## 14. Integração AI-Pessoal (ponte v0.9)
 
-**Não implementar até AI-Pessoal MVP estável.**
-
-Esboço:
+Implementada no **AI-Pessoal** (não neste repo):
 
 ```text
-Cortana finaliza relatório
-    → POST opcional ou export MD
-    → AI-Pessoal importa como:
+cortana: compare ERPs para varejo
+    → POST /api/searches (Cortana)
+    → aguarda completed
+    → GET /api/searches/:id
+    → aprendi: no ~/.ai-pessoal (com Fonte + links)
 
-aprendi: [resumo]. Fonte: Cortana search #123 + URLs
-projeto: Revigor
+!cortana import <uuid>   # pesquisa já feita na UI Cortana
 ```
 
-Endpoint candidato: `GET /searches/:id/export` (já existe export MD na UI — reutilizar).
+Config no AI-Pessoal: `features.cortana_bridge` + `cortana.base_url` (padrão `:8787`).
 
 ---
 

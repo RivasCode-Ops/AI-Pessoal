@@ -63,9 +63,15 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - Mensagens de sessão no índice (`sess:…`)
 - `!indexar` inclui `data/sessions/*.jsonl`
 
+## Cortana (ponte) ✅ (v0.9.0)
+
+- `cortana: demanda` → pesquisa + `aprendi:` com links
+- `!cortana on | import ID` · API `POST /api/cortana/import`
+- Repositório separado; não funde código
+
 ## v2 (restante)
 
-- Integração Cortana (web → `aprendi:`)
+- `cortana:` na interface web (pesquisa assíncrona)
 - Indexação incremental após cada mensagem (opcional)
 
 ## v3+ (só com coração sólido)

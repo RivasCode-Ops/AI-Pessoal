@@ -17,7 +17,15 @@ from ai_pessoal.config import (
     load_config,
     resolve_project,
     set_active_project,
+    set_cortana_bridge,
     set_semantic_search,
+)
+from ai_pessoal.cortana_bridge import (
+    CortanaError,
+    health_check as cortana_health,
+    import_existing_search,
+    is_cortana_enabled,
+    run_search_and_import,
 )
 from ai_pessoal.documents import documents_dir, index_all_documents, list_document_sources
 from ai_pessoal.session_index import index_all_sessions
@@ -34,6 +42,7 @@ _RELACIONADOS_RE = re.compile(r"^relacionados\s*:\s*(.+)$", re.IGNORECASE | re.D
 _RECUPERAR_RE = re.compile(r"^recuperar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _PROJETO_ATIVO_RE = re.compile(r"^projeto\s+ativo\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _SEMANTICO_RE = re.compile(r"^semantico\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+_CORTANA_RE = re.compile(r"^cortana\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 
 
 def _help_text() -> str:
@@ -61,6 +70,10 @@ def _help_text() -> str:
 [bold]Semântica[/] (Ollama nomic-embed-text)
   !indexar — capturas + PDFs + conversas
   !semantico on | off
+
+[bold]Cortana[/] (pesquisa web → aprendi:)
+  cortana: compare ERPs para varejo
+  !cortana on | !cortana import ID
 
 [bold]Conversa[/]
   ? pergunta
@@ -97,8 +110,9 @@ def _print_banner(cfg, data_dir, model: str, ollama_ok: bool) -> None:
     n = len(list_captures(data_dir, limit=500))
     active = get_active_project(cfg)
     sem = "[green]semântica on[/]" if is_semantic_enabled(cfg) else "[dim]semântica off[/]"
+    cor = "[green]cortana on[/]" if is_cortana_enabled(cfg) else "[dim]cortana off[/]"
     proj_line = f"\nProjeto ativo: [cyan]{active}[/]" if active else "\nProjeto ativo: [dim]nenhum[/]"
-    proj_line += f" · {sem}"
+    proj_line += f" · {sem} · {cor}"
     console.print(
         Panel(
             f"[bold]AI-Pessoal[/] v{__version__} — segundo cérebro local\n"
@@ -325,6 +339,73 @@ def _cmd_indexar(cfg, data_dir) -> None:
     console.print(f"[dim]PDFs: {documents_dir(data_dir)}[/]")
 
 
+def _cmd_cortana(cfg, data_dir, demand: str) -> None:
+    if not is_cortana_enabled(cfg):
+        console.print("[yellow]Ative com !cortana on (Cortana em :8787)[/]")
+        return
+    if not cortana_health(cfg):
+        console.print("[red]Cortana offline. Suba o projeto Cortana (npm run dev).[/]")
+        return
+    q = demand.strip()
+    if not q:
+        console.print("[yellow]Uso: cortana: sua pergunta de pesquisa[/]")
+        return
+
+    def on_progress(prog: dict) -> None:
+        msg = prog.get("message", "")
+        pct = prog.get("percent", 0)
+        console.print(f"[dim]Cortana {pct}% — {msg}[/]", end="\r")
+
+    with console.status("[bold cyan]Pesquisando no Cortana…[/]"):
+        try:
+            entry, search_id = run_search_and_import(
+                data_dir, cfg, q, on_progress=on_progress
+            )
+        except CortanaError as e:
+            console.print(f"\n[red]{e}[/]")
+            return
+    console.print()
+    console.print(
+        f"[green]✓[/] aprendi: gravado → [dim]{entry.path.name}[/] "
+        f"(Cortana {search_id[:8]}…)"
+    )
+
+
+def _cmd_cortana_manage(cfg, data_dir, arg: str) -> dict:
+    raw = arg.strip()
+    if raw.lower() in ("on", "sim", "true", "1"):
+        cfg = set_cortana_bridge(data_dir, True)
+        ok = cortana_health(cfg)
+        state = "conectado" if ok else "offline (suba Cortana :8787)"
+        console.print(f"[green]✓[/] Ponte Cortana ativada — {state}")
+        return cfg
+    if raw.lower() in ("off", "nao", "não", "false", "0"):
+        cfg = set_cortana_bridge(data_dir, False)
+        console.print("[green]✓[/] Ponte Cortana desativada.")
+        return cfg
+    if raw.lower().startswith("import"):
+        sid = raw[6:].strip()
+        if not sid:
+            console.print("[yellow]Uso: !cortana import UUID-da-pesquisa[/]")
+            return cfg
+        try:
+            entry = import_existing_search(data_dir, cfg, sid)
+            console.print(f"[green]✓[/] Importado → [dim]{entry.path.name}[/]")
+        except CortanaError as e:
+            console.print(f"[red]{e}[/]")
+        return cfg
+    if not raw:
+        en = is_cortana_enabled(cfg)
+        ok = cortana_health(cfg) if en else False
+        console.print(
+            f"Cortana: [{'green' if en else 'dim'}]{'on' if en else 'off'}[/] · "
+            f"API: [{'green' if ok else 'red'}]{'ok' if ok else 'offline'}[/]"
+        )
+        return cfg
+    console.print("[yellow]!cortana on | off | import ID[/]")
+    return cfg
+
+
 def _cmd_docs(data_dir) -> None:
     names = list_document_sources(data_dir)
     folder = documents_dir(data_dir)
@@ -511,6 +592,15 @@ def main() -> None:
         m_sem = _SEMANTICO_RE.match(line)
         if m_sem:
             _cmd_semantico(cfg, data_dir, m_sem.group(1))
+            continue
+
+        if low.startswith("!cortana"):
+            cfg = _cmd_cortana_manage(cfg, data_dir, line[8:])
+            continue
+
+        m_cort = _CORTANA_RE.match(line)
+        if m_cort:
+            _cmd_cortana(cfg, data_dir, m_cort.group(1))
             continue
 
         m_search = _SEARCH_RE.match(line)
