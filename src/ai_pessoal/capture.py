@@ -66,22 +66,48 @@ def capture_dir(data_dir: Path) -> Path:
     return data_dir / "data" / "capture"
 
 
+def _parse_meta_from_body(kind: str, body: str) -> tuple[str, dict[str, str]]:
+    """Extrai projeto: / Motivo: / Risco: / Fonte: do corpo quando presentes."""
+    extra: dict[str, str] = {}
+    lines = body.strip().splitlines()
+    kept: list[str] = []
+    for line in lines:
+        low = line.strip().lower()
+        if low.startswith("projeto:") and "projeto" not in extra:
+            extra["projeto"] = line.split(":", 1)[1].strip()
+            continue
+        if kind == "decisao":
+            if low.startswith("motivo:"):
+                extra["motivo"] = line.split(":", 1)[1].strip()
+                continue
+            if low.startswith("risco:"):
+                extra["risco"] = line.split(":", 1)[1].strip()
+                continue
+        if kind == "aprendi" and low.startswith("fonte:"):
+            extra["fonte"] = line.split(":", 1)[1].strip()
+            continue
+        kept.append(line)
+    clean = "\n".join(kept).strip() or body.strip()
+    return clean, extra
+
+
 def save_capture(data_dir: Path, kind: str, body: str) -> CaptureEntry:
     if kind not in CAPTURE_TYPES:
         raise ValueError(f"Tipo inválido: {kind}")
 
+    clean_body, extra = _parse_meta_from_body(kind, body)
     now = datetime.now().astimezone()
     entry_id = now.strftime("%Y%m%d-%H%M%S") + f"-{kind}"
-    dest = capture_dir(data_dir) / f"{entry_id}.md"
-    content = (
-        f"---\n"
-        f"type: {kind}\n"
-        f"created: {now.isoformat()}\n"
-        f"---\n\n"
-        f"{body.strip()}\n"
-    )
-    dest.write_text(content, encoding="utf-8")
-    return CaptureEntry(id=entry_id, type=kind, body=body.strip(), created=now, path=dest)
+    folder = capture_dir(data_dir)
+    folder.mkdir(parents=True, exist_ok=True)
+    dest = folder / f"{entry_id}.md"
+
+    fm_lines = [f"type: {kind}", f"created: {now.isoformat()}"]
+    for key, val in extra.items():
+        fm_lines.append(f"{key}: {val}")
+    frontmatter = "---\n" + "\n".join(fm_lines) + "\n---\n\n"
+    dest.write_text(frontmatter + clean_body + "\n", encoding="utf-8")
+    return CaptureEntry(id=entry_id, type=kind, body=clean_body, created=now, path=dest)
 
 
 def _read_frontmatter(path: Path) -> tuple[dict[str, str], str]:
@@ -143,23 +169,44 @@ def list_captures(
     return entries
 
 
-def search_captures(data_dir: Path, query: str, limit: int = 15) -> list[CaptureEntry]:
+def _entry_search_blob(entry: CaptureEntry, meta: dict[str, str]) -> str:
+    parts = [entry.type, entry.body, entry.id]
+    parts.extend(meta.values())
+    return " ".join(parts).lower()
+
+
+def search_captures(
+    data_dir: Path,
+    query: str,
+    limit: int = 15,
+    *,
+    project: str | None = None,
+    kind: str | None = None,
+) -> list[CaptureEntry]:
     q = query.strip().lower()
-    if not q:
-        return []
+    proj = (project or "").strip().lower()
     hits: list[CaptureEntry] = []
     folder = capture_dir(data_dir)
     if not folder.exists():
         return hits
+    if not q and not proj:
+        return hits
 
     for path in sorted(folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
+            meta, _ = _read_frontmatter(path)
             entry = load_capture(path)
         except OSError:
             continue
-        hay = f"{entry.type} {entry.body}".lower()
-        if q in hay or q in entry.id.lower():
-            hits.append(entry)
+        if kind and entry.type != kind:
+            continue
+        blob = _entry_search_blob(entry, meta)
+        if proj and proj not in blob:
+            if entry.type != "projeto" or proj not in entry.body.lower():
+                continue
+        if q and q not in blob:
+            continue
+        hits.append(entry)
         if len(hits) >= limit:
             break
     return hits

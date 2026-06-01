@@ -24,7 +24,7 @@
     "allow_shell": false
   },
   "features": {
-    "long_term_memory": false,
+    "long_term_memory": true,
     "semantic_search": false,
     "reminders": false
   }

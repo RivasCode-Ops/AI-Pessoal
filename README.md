@@ -23,13 +23,15 @@ Não é Todoist, agenda, WhatsApp-bot nem ferramenta de código.
 ```powershell
 cd "d:\PROJETOS\Assistente Pessoal"
 .\install.ps1
-.\.venv\Scripts\Activate.ps1
-python -m ai_pessoal
+.\run.ps1          # terminal
+.\run-web.ps1      # navegador em http://127.0.0.1:8765
 ```
 
 Requisitos: **Python 3.11+**, **Ollama** rodando (`ollama serve`) e um modelo baixado (ex.: `ollama pull qwen2.5:7b`).
 
 Dados do usuário: `%USERPROFILE%\.ai-pessoal\` (config + capturas + sessões).
+
+Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Uso rápido
 
@@ -40,8 +42,11 @@ Dados do usuário: `%USERPROFILE%\.ai-pessoal\` (config + capturas + sessões).
 | `? como priorizo projetos?` | Conversa com Ollama |
 | `buscar: marketing` | Busca em capturas e conversas |
 | `!hoje` | Lista capturas de hoje |
+| `quem sou eu?` | Perfil só do registrado |
+| `!memoria` / `!projetos` | Fatos, prefs, projetos |
+| `projeto: Revigor` | Busca por projeto |
 | `!sair` | Encerra |
 
 ## Estado
 
-**v0.1.0** — MVP semana 1 + busca textual (semana 2): TUI, captura tipada, chat Ollama, histórico JSONL, `buscar:`.
+**v0.2.0** — Terminal + **interface web**, memória no chat, perfil `quem sou eu?`, decisão/aprendizado estruturados, busca por projeto.

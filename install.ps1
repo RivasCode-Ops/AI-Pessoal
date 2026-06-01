@@ -40,6 +40,6 @@ if ($ollama) {
 }
 
 Write-Host "`n=== Pronto ===" -ForegroundColor Green
-Write-Host "Ativar:  .\.venv\Scripts\Activate.ps1"
-Write-Host "Rodar:   python -m ai_pessoal"
-Write-Host "Ou:      ai-pessoal"
+Write-Host "Terminal:  .\run.ps1"
+Write-Host "Web UI:    .\run-web.ps1   -> http://127.0.0.1:8765"
+Write-Host "Ou:        python -m ai_pessoal"

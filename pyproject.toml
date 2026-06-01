@@ -6,8 +6,12 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["rich>=13.7.0"]
 
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn[standard]>=0.27"]
+
 [project.scripts]
 ai-pessoal = "ai_pessoal.cli:main"
+ai-pessoal-web = "ai_pessoal.web.app:main"
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -15,3 +19,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+ai_pessoal = ["static/*"]

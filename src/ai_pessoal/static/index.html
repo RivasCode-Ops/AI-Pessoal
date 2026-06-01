@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI-Pessoal</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>AI-Pessoal</h1>
+    <p class="tagline">Segundo cérebro local</p>
+    <div id="status" class="status">…</div>
+  </header>
+
+  <main class="grid">
+    <section class="panel">
+      <h2>Captura</h2>
+      <p class="hint">nota: · decisão: · fato: · projeto: · aprendi:</p>
+      <textarea id="captureInput" rows="4" placeholder="decisão: foco no MVP&#10;Motivo: escopo claro"></textarea>
+      <button type="button" id="btnCapture">Gravar (sem IA)</button>
+      <p id="captureMsg" class="msg"></p>
+    </section>
+
+    <section class="panel panel-wide">
+      <h2>Conversa</h2>
+      <div id="chatLog" class="chat-log"></div>
+      <div class="chat-row">
+        <input id="chatInput" type="text" placeholder="Pergunte qualquer coisa…" />
+        <button type="button" id="btnChat">Enviar</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Buscar</h2>
+      <input id="searchInput" type="search" placeholder="termo ou projeto:" />
+      <button type="button" id="btnSearch">Buscar</button>
+      <ul id="searchResults"></ul>
+    </section>
+
+    <section class="panel">
+      <h2>Recentes</h2>
+      <button type="button" id="btnRefresh" class="secondary">Atualizar</button>
+      <ul id="recentList"></ul>
+    </section>
+
+    <section class="panel panel-wide">
+      <h2>Perfil registrado</h2>
+      <button type="button" id="btnProfile" class="secondary">Quem sou eu?</button>
+      <pre id="profileOut" class="profile"></pre>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

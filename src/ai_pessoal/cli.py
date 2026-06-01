@@ -1,56 +1,67 @@
 from __future__ import annotations
 
 import re
-import sys
 
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+
 from ai_pessoal import __version__
 from ai_pessoal.capture import list_captures, parse_capture_line, save_capture, search_captures
+from ai_pessoal.chat import run_chat
 from ai_pessoal.config import load_config
-from ai_pessoal.ollama_client import OllamaError, chat, health_check, list_models
+from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
+from ai_pessoal.ollama_client import OllamaError, health_check, list_models
 from ai_pessoal.session import ChatSession, search_sessions, start_session
 
 console = Console()
 
 _SEARCH_RE = re.compile(r"^buscar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+_PROJETO_BUSCA_RE = re.compile(r"^projeto\s*:\s*(.+)$", re.IGNORECASE)
 
 
 def _help_text() -> str:
     return """
-[bold]Captura[/] (sem IA, grava na hora)
-  nota: texto
-  ideia: texto
-  decisão: texto
-  fato: / pref: / projeto: / aprendi:  (memória — semana 3+)
+[bold]Captura[/] (sem IA)
+  nota: / ideia: / decisão: / fato: / pref: / projeto: / aprendi:
+
+  Decisão com estrutura:
+    decisão: escolher Ollama
+    Motivo: privacidade
+    Risco: modelo menor
+
+  Aprendizado:
+    aprendi: vídeo converte melhor
+    Fonte: campanha jun/2026
 
 [bold]Conversa[/]
-  ? sua pergunta
-  ou qualquer linha que não seja captura/comando
+  ? pergunta
+  ou texto livre (usa memória + trechos relevantes)
+
+[bold]Perfil[/]
+  quem sou eu?
+  !memoria
+  !projetos
 
 [bold]Comandos[/]
-  !ajuda          esta ajuda
-  !sair           encerrar
-  !notas [n]      últimas capturas (padrão 10)
-  !hoje           capturas de hoje
-  !buscar termo   busca textual (ou buscar: termo)
-  !modelo         modelo Ollama atual
-  !ollama         testar conexão Ollama
+  !ajuda | !sair | !notas [n] | !hoje
+  !buscar termo | buscar: termo | projeto: Nome
+  !modelo | !ollama | !web  (instruções interface web)
 """
 
 
 def _print_banner(data_dir, model: str, ollama_ok: bool) -> None:
     status = "[green]Ollama OK[/]" if ollama_ok else "[red]Ollama offline[/]"
+    n = len(list_captures(data_dir, limit=500))
     console.print(
         Panel(
             f"[bold]AI-Pessoal[/] v{__version__} — segundo cérebro local\n"
             f"Dados: [dim]{data_dir}[/]\n"
-            f"Modelo: [cyan]{model}[/] · {status}",
+            f"Modelo: [cyan]{model}[/] · {status} · [dim]{n} capturas[/]",
             border_style="blue",
         )
     )
-    console.print("[dim]Captura: nota: / ideia: / decisão:  ·  Conversa: ?texto  ·  !ajuda[/]\n")
+    console.print("[dim]Captura: nota: · Conversa: ? · Perfil: quem sou eu? · !ajuda[/]\n")
 
 
 def _format_capture_row(entry) -> str:
@@ -61,13 +72,21 @@ def _format_capture_row(entry) -> str:
     return f"[dim]{ts}[/] [cyan]{entry.type_label}[/] {body}"
 
 
-def _cmd_notas(data_dir, arg: str) -> None:
+def _parse_buscar_query(raw: str) -> tuple[str, str | None]:
+    raw = raw.strip()
+    m = _PROJETO_BUSCA_RE.match(raw)
+    if m:
+        return "", m.group(1).strip()
+    return raw, None
+
+
+def _cmd_notas(data_dir, arg: str, kind: str | None = None) -> None:
     limit = 10
     if arg.strip().isdigit():
         limit = max(1, min(50, int(arg.strip())))
-    entries = list_captures(data_dir, limit=limit)
+    entries = list_captures(data_dir, limit=limit, kind=kind)
     if not entries:
-        console.print("[yellow]Nenhuma captura ainda.[/]")
+        console.print("[yellow]Nenhuma captura.[/]")
         return
     for e in entries:
         console.print(_format_capture_row(e))
@@ -83,16 +102,17 @@ def _cmd_hoje(data_dir) -> None:
 
 
 def _cmd_buscar(data_dir, query: str) -> None:
-    q = query.strip()
-    if not q:
-        console.print("[yellow]Uso: buscar: termo  ou  !buscar termo[/]")
+    q, project = _parse_buscar_query(query)
+    if not q and not project:
+        console.print("[yellow]Uso: buscar: termo  |  projeto: Nome  |  !buscar termo[/]")
         return
 
-    cap_hits = search_captures(data_dir, q)
-    sess_hits = search_sessions(data_dir, q)
+    cap_hits = search_captures(data_dir, q, project=project)
+    sess_hits = search_sessions(data_dir, q) if q else []
 
+    label = project or q
     if not cap_hits and not sess_hits:
-        console.print(f"[yellow]Nada encontrado para «{q}».[/]")
+        console.print(f"[yellow]Nada encontrado para «{label}».[/]")
         return
 
     if cap_hits:
@@ -109,39 +129,55 @@ def _cmd_buscar(data_dir, query: str) -> None:
             console.print(f"[dim]{path.name}[/] [{msg.role}] {snippet}")
 
 
-def _run_chat(
-    cfg: dict,
-    session: ChatSession,
-    user_text: str,
-) -> None:
-    ollama = cfg["ollama"]
-    chat_cfg = cfg["chat"]
-    base = str(ollama["base_url"])
-    model = str(ollama["model_default"])
-    timeout = float(ollama.get("timeout_seconds", 120))
-    temp = float(chat_cfg.get("temperature", 0.7))
-    max_hist = int(chat_cfg.get("max_history_messages", 20))
-    system = str(chat_cfg.get("system_prompt", ""))
+def _cmd_memoria(data_dir) -> None:
+    profile = list_profile_entries(data_dir)
+    any_ = False
+    for kind, entries in profile.items():
+        if not entries:
+            continue
+        any_ = True
+        console.print(f"\n[bold]{kind}[/]")
+        for e in entries:
+            console.print(_format_capture_row(e))
+    if not any_:
+        console.print("[yellow]Sem fatos, prefs ou projetos. Use fato:/pref:/projeto:[/]")
 
-    if not health_check(base):
-        console.print(
-            "[red]Ollama não está acessível.[/] Inicie com [bold]ollama serve[/] "
-            "ou ajuste [dim]config.json[/]."
-        )
+
+def _cmd_projetos(data_dir) -> None:
+    names = list_projects(data_dir)
+    if not names:
+        console.print("[yellow]Nenhum projeto registrado (projeto: Nome).[/]")
         return
+    console.print("[bold]Projetos:[/] " + ", ".join(names))
 
-    session.append("user", user_text)
-    messages = [{"role": "system", "content": system}]
-    messages.extend(session.recent_for_api(max_hist))
 
+def _cmd_web() -> None:
+    console.print(
+        "[bold]Interface web[/]\n"
+        "  pip install -e \".[web]\"\n"
+        "  python -m ai_pessoal.web\n"
+        "  Abra [link=http://127.0.0.1:8765]http://127.0.0.1:8765[/link]"
+    )
+
+
+def _is_who_am_i(text: str) -> bool:
+    low = text.lower().strip().rstrip("?").strip()
+    return low in (
+        "quem sou eu",
+        "quem sou",
+        "meu perfil",
+        "o que você sabe sobre mim",
+        "o que voce sabe sobre mim",
+    )
+
+
+def _run_chat_ui(cfg, data_dir, session, user_text: str) -> None:
     with console.status("[bold cyan]Pensando…[/]"):
         try:
-            reply = chat(base, model, messages, temperature=temp, timeout=timeout)
+            reply = run_chat(cfg, data_dir, session, user_text)
         except OllamaError as e:
             console.print(f"[red]{e}[/]")
             return
-
-    session.append("assistant", reply)
     console.print()
     console.print(Markdown(reply))
     console.print()
@@ -176,6 +212,23 @@ def main() -> None:
             console.print(_help_text())
             continue
 
+        if low == "!web":
+            _cmd_web()
+            continue
+
+        if low == "!memoria":
+            _cmd_memoria(data_dir)
+            continue
+
+        if low == "!projetos":
+            _cmd_projetos(data_dir)
+            continue
+
+        if _is_who_am_i(line):
+            console.print(Markdown(format_who_am_i(data_dir)))
+            console.print()
+            continue
+
         if low == "!ollama":
             ok = health_check(str(ollama["base_url"]))
             if ok:
@@ -188,11 +241,19 @@ def main() -> None:
             continue
 
         if low == "!modelo":
-            console.print(f"Modelo configurado: [cyan]{model}[/]")
+            console.print(f"Modelo: [cyan]{model}[/]")
             continue
 
         if low.startswith("!notas"):
             _cmd_notas(data_dir, line[6:])
+            continue
+
+        if low.startswith("!decisoes"):
+            _cmd_notas(data_dir, line[9:], kind="decisao")
+            continue
+
+        if low.startswith("!aprendizados"):
+            _cmd_notas(data_dir, line[13:], kind="aprendi")
             continue
 
         if low == "!hoje":
@@ -208,6 +269,11 @@ def main() -> None:
             _cmd_buscar(data_dir, m_search.group(1))
             continue
 
+        m_proj = _PROJETO_BUSCA_RE.match(line)
+        if m_proj:
+            _cmd_buscar(data_dir, line)
+            continue
+
         parsed = parse_capture_line(line)
         if parsed:
             kind, body = parsed
@@ -215,10 +281,7 @@ def main() -> None:
                 console.print("[yellow]Escreva algo após o prefixo.[/]")
                 continue
             entry = save_capture(data_dir, kind, body)
-            console.print(
-                f"[green]✓[/] {entry.type_label} gravada "
-                f"[dim]({entry.path.name})[/]"
-            )
+            console.print(f"[green]✓[/] {entry.type_label} → [dim]{entry.path.name}[/]")
             continue
 
         if line.startswith(question_prefix):
@@ -226,10 +289,10 @@ def main() -> None:
             if not user_text:
                 console.print("[yellow]Escreva a pergunta após ?[/]")
                 continue
-            _run_chat(cfg, session, user_text)
+            _run_chat_ui(cfg, data_dir, session, user_text)
             continue
 
-        _run_chat(cfg, session, line)
+        _run_chat_ui(cfg, data_dir, session, line)
 
 
 if __name__ == "__main__":
