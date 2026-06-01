@@ -1,0 +1,17 @@
+---
+description: Guardião do produto AI-Pessoal — escopo e decisões
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+Antes de sugerir ou implementar mudanças neste repositório, leia `CONSTITUICAO.md` e `ESPECIFICACAO.md`.
+
+Regras resumidas:
+- Dor norte: lembrar, recuperar e conectar conhecimento pessoal do usuário.
+- Não é: agenda, todo, CRM, WhatsApp-bot, assistente de dev, agregador estilo Notion+ChatGPT+Todoist.
+- Toda feature passa pelas 6 perguntas em CONSTITUICAO.md (seção 3).
+- Ordem de crescimento: Capturar → Organizar → Recuperar → Relacionar → Compreender — não pular fases.
+- Cortana (pesquisa web) e workbench (método) são projetos separados; não fundir no core.
+- Preferir simplicidade, Markdown/JSONL, Ollama local, dados em ~/.ai-pessoal/.
+- Bug crítico antes de feature nova.

@@ -6,6 +6,7 @@ Não é Todoist, agenda, WhatsApp-bot nem ferramenta de código.
 
 ## Documentação
 
+- **[CONSTITUICAO.md](./CONSTITUICAO.md)** — Guardião do Produto: 6 perguntas, princípios, o que fazer quando… (ler antes de pedir features)
 - **[ESPECIFICACAO.md](./ESPECIFICACAO.md)** — dor norte, teste de escopo, memória em 5 tipos, MVP 30 dias
 - **[docs/ROADMAP.md](./docs/ROADMAP.md)** — semanas 1–4 e v2 (RAG/PDFs)
 - **[docs/CORTANA.md](./docs/CORTANA.md)** — guia de trabalho quando for sessão no projeto Cortana (irmão: pesquisa web + fontes)
