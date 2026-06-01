@@ -8,7 +8,13 @@ from ai_pessoal.memory import build_memory_context
 from ai_pessoal.recover import RetrievalIntent, format_context_block, retrieve_for_query
 from ai_pessoal.semantic import ScoredHit
 from ai_pessoal.capture import CaptureEntry
-from ai_pessoal.ollama_client import OllamaError, chat, health_check, resolve_chat_model
+from ai_pessoal.ollama_client import (
+    OllamaError,
+    chat,
+    health_check,
+    model_not_found_hint,
+    resolve_chat_model,
+)
 from ai_pessoal.session_index import try_index_after_chat
 from ai_pessoal.session import ChatSession
 
@@ -58,6 +64,7 @@ def run_chat(
     chat_cfg = cfg["chat"]
     base = str(ollama["base_url"])
     model = resolve_chat_model(cfg)
+    configured = str(ollama.get("model_default", ""))
     timeout = float(ollama.get("timeout_seconds", 120))
     temp = float(chat_cfg.get("temperature", 0.7))
     max_hist = int(chat_cfg.get("max_history_messages", 20))
@@ -86,7 +93,13 @@ def run_chat(
     messages = [{"role": "system", "content": system}]
     messages.extend(session.recent_for_api(max_hist))
 
-    reply = chat(base, model, messages, temperature=temp, timeout=timeout)
+    try:
+        reply = chat(base, model, messages, temperature=temp, timeout=timeout)
+    except OllamaError as e:
+        err = str(e)
+        if "not found" in err.lower() and configured:
+            raise OllamaError(model_not_found_hint(cfg, configured)) from e
+        raise
     session.append("assistant", reply)
     try_index_after_chat(data_dir, cfg, session.path)
     source_items: list[dict[str, str]] = [

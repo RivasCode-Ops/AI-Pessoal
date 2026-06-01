@@ -29,7 +29,12 @@ from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import format_related_markdown, gather_related
 from ai_pessoal.export_acervo import export_acervo
-from ai_pessoal.ollama_client import OllamaError, health_check, resolve_chat_model
+from ai_pessoal.ollama_client import (
+    OllamaError,
+    health_check,
+    list_models,
+    resolve_chat_model,
+)
 from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -75,6 +80,7 @@ def api_health():
         "data_dir": str(data_dir),
         "model": resolve_chat_model(cfg),
         "model_config": cfg["ollama"]["model_default"],
+        "models_available": list_models(base) if health_check(base) else [],
         "active_project": get_active_project(cfg),
         "semantic_search": is_semantic_enabled(cfg),
         "embed_model": cfg.get("semantic", {}).get("embed_model", "nomic-embed-text"),

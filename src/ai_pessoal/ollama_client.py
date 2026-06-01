@@ -30,6 +30,8 @@ def _request(
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")
+        if e.code == 404 and "model" in detail.lower() and "not found" in detail.lower():
+            raise OllamaError(detail) from e
         raise OllamaError(f"HTTP {e.code}: {detail}") from e
     except urllib.error.URLError as e:
         raise OllamaError(
@@ -46,31 +48,47 @@ def health_check(base_url: str, timeout: float = 5) -> bool:
         return False
 
 
-def resolve_chat_model(cfg: dict) -> str:
-    """Usa model_default se existir no Ollama; senão o primeiro disponível."""
-    preferred = str(cfg.get("ollama", {}).get("model_default", "")).strip()
-    base = str(cfg.get("ollama", {}).get("base_url", "http://127.0.0.1:11434"))
-    if not preferred or not health_check(base, timeout=3):
-        return preferred or "llama3.2:3b"
-    try:
-        models = list_models(base)
-    except OllamaError:
-        return preferred
-    if not models:
-        return preferred
-    if preferred in models:
-        return preferred
-    base_name = preferred.split(":")[0]
-    for name in models:
-        if name == base_name or name.startswith(base_name + ":"):
-            return name
-    return models[0]
-
-
 def list_models(base_url: str, timeout: float = 10) -> list[str]:
     data = _request(base_url, "/api/tags", timeout=timeout)
     models = data.get("models") or []
     return [str(m.get("name", "")) for m in models if m.get("name")]
+
+
+def resolve_chat_model(cfg: dict) -> str:
+    """Usa model_default se existir no Ollama; senão o primeiro disponível."""
+    preferred = str(cfg.get("ollama", {}).get("model_default", "")).strip()
+    base = str(cfg.get("ollama", {}).get("base_url", "http://127.0.0.1:11434"))
+    try:
+        models = list_models(base, timeout=5)
+    except OllamaError:
+        return preferred or "llama3.2:3b"
+    if not models:
+        return preferred or "llama3.2:3b"
+    if preferred and preferred in models:
+        return preferred
+    if preferred:
+        base_name = preferred.split(":")[0]
+        for name in models:
+            if name == base_name or name.startswith(base_name + ":"):
+                return name
+    return models[0]
+
+
+def model_not_found_hint(cfg: dict, tried: str) -> str:
+    available = []
+    try:
+        available = list_models(str(cfg.get("ollama", {}).get("base_url", "")))
+    except OllamaError:
+        pass
+    lines = [
+        f"Modelo «{tried}» não está no Ollama.",
+        "Opções:",
+        f"  1) ollama pull {tried}",
+    ]
+    if available:
+        lines.append(f"  2) Ou em config.json use: \"model_default\": \"{available[0]}\"")
+        lines.append(f"     (instalados: {', '.join(available)})")
+    return "\n".join(lines)
 
 
 def embed_text(

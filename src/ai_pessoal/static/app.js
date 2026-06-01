@@ -26,7 +26,11 @@ async function loadStatus() {
     const ollama = h.ollama ? "Ollama OK" : "Ollama offline";
     const proj = h.active_project ? ` · projeto: ${h.active_project}` : "";
     const sem = h.semantic_search ? " · semântica" : "";
-    el("status").textContent = `${ollama} · ${h.model}${proj}${sem}`;
+    let modelLine = h.model;
+    if (h.model_config && h.model_config !== h.model) {
+      modelLine = `${h.model} (config: ${h.model_config})`;
+    }
+    el("status").textContent = `${ollama} · ${modelLine}${proj}${sem}`;
     if (h.active_project) el("activeProject").value = h.active_project;
   } catch {
     el("status").textContent = "API indisponível — rode python -m ai_pessoal.web";
