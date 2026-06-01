@@ -38,6 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "embed_model": "nomic-embed-text",
         "min_score": 0.35,
         "max_results": 12,
+        "auto_index_on_chat": True,
     },
     "documents": {
         "chunk_chars": 900,
@@ -123,7 +124,7 @@ def resolve_data_dir(cfg: dict[str, Any]) -> Path:
 
 
 def ensure_data_layout(data_dir: Path) -> None:
-    for sub in ("capture", "sessions", "memory", "links", "embeddings", "documents"):
+    for sub in ("capture", "sessions", "memory", "links", "embeddings", "documents", "exports"):
         (data_dir / "data" / sub).mkdir(parents=True, exist_ok=True)
 
 

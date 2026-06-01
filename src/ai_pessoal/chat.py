@@ -8,7 +8,8 @@ from ai_pessoal.memory import build_memory_context
 from ai_pessoal.recover import RetrievalIntent, format_context_block, retrieve_for_query
 from ai_pessoal.semantic import ScoredHit
 from ai_pessoal.capture import CaptureEntry
-from ai_pessoal.ollama_client import OllamaError, chat, health_check
+from ai_pessoal.ollama_client import OllamaError, chat, health_check, resolve_chat_model
+from ai_pessoal.session_index import try_index_after_chat
 from ai_pessoal.session import ChatSession
 
 
@@ -56,7 +57,7 @@ def run_chat(
     ollama = cfg["ollama"]
     chat_cfg = cfg["chat"]
     base = str(ollama["base_url"])
-    model = str(ollama["model_default"])
+    model = resolve_chat_model(cfg)
     timeout = float(ollama.get("timeout_seconds", 120))
     temp = float(chat_cfg.get("temperature", 0.7))
     max_hist = int(chat_cfg.get("max_history_messages", 20))
@@ -87,6 +88,7 @@ def run_chat(
 
     reply = chat(base, model, messages, temperature=temp, timeout=timeout)
     session.append("assistant", reply)
+    try_index_after_chat(data_dir, cfg, session.path)
     source_items: list[dict[str, str]] = [
         {"id": e.id, "type": e.type_label, "body": e.body[:200]}
         for e in entries

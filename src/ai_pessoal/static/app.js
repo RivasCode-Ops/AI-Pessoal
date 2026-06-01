@@ -151,5 +151,29 @@ el("btnRelated").onclick = async () => {
 
 el("btnRefresh").onclick = loadRecent;
 
+el("btnExport").onclick = async () => {
+  try {
+    const r = await api("/api/export", { method: "POST" });
+    el("toolsMsg").textContent = `✓ Backup: ${r.path}`;
+  } catch (e) {
+    el("toolsMsg").textContent = e.message;
+  }
+};
+
+el("btnCortanaImport").onclick = async () => {
+  const search_id = el("cortanaId").value.trim();
+  if (!search_id) return;
+  try {
+    const r = await api("/api/cortana/import", {
+      method: "POST",
+      body: JSON.stringify({ search_id }),
+    });
+    el("toolsMsg").textContent = `✓ aprendi: ${r.id}`;
+    loadRecent();
+  } catch (e) {
+    el("toolsMsg").textContent = e.message;
+  }
+};
+
 loadStatus();
 loadRecent();

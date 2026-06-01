@@ -28,12 +28,13 @@ from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import format_related_markdown, gather_related
-from ai_pessoal.ollama_client import OllamaError, health_check
+from ai_pessoal.export_acervo import export_acervo
+from ai_pessoal.ollama_client import OllamaError, health_check, resolve_chat_model
 from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.9.0")
+app = FastAPI(title="AI-Pessoal", version="1.0.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -72,7 +73,8 @@ def api_health():
         "ok": True,
         "ollama": health_check(base),
         "data_dir": str(data_dir),
-        "model": cfg["ollama"]["model_default"],
+        "model": resolve_chat_model(cfg),
+        "model_config": cfg["ollama"]["model_default"],
         "active_project": get_active_project(cfg),
         "semantic_search": is_semantic_enabled(cfg),
         "embed_model": cfg.get("semantic", {}).get("embed_model", "nomic-embed-text"),
@@ -295,6 +297,13 @@ def api_semantic_search(q: str = "", limit: int = 15):
         }
         for s in hits
     ]
+
+
+@app.post("/api/export")
+def api_export():
+    _, data_dir = load_config()
+    path = export_acervo(data_dir)
+    return {"ok": True, "path": str(path)}
 
 
 @app.post("/api/cortana/import")

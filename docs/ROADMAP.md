@@ -69,10 +69,16 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - `!cortana on | import ID` · API `POST /api/cortana/import`
 - Repositório separado; não funde código
 
+## v1.0 ✅
+
+- Modelo Ollama com fallback automático
+- Indexação incremental do chat (`auto_index_on_chat`)
+- `!exportar` / backup em `data/exports/`
+- Web: exportar + importar Cortana por ID
+
 ## v2 (restante)
 
-- `cortana:` na interface web (pesquisa assíncrona)
-- Indexação incremental após cada mensagem (opcional)
+- `cortana:` na web (pesquisa completa assíncrona)
 
 ## v3+ (só com coração sólido)
 

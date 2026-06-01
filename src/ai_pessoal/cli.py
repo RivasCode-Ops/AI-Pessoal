@@ -31,7 +31,8 @@ from ai_pessoal.documents import documents_dir, index_all_documents, list_docume
 from ai_pessoal.session_index import index_all_sessions
 from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
-from ai_pessoal.ollama_client import OllamaError, health_check, list_models
+from ai_pessoal.export_acervo import export_acervo
+from ai_pessoal.ollama_client import OllamaError, health_check, list_models, resolve_chat_model
 from ai_pessoal.session import ChatSession, search_sessions, start_session
 
 console = Console()
@@ -97,6 +98,9 @@ def _help_text() -> str:
   Na captura, vincule com:
     ref: 20260601-120000-nota
     projeto: Revigor
+
+[bold]Utilidades[/]
+  !exportar — backup em data/exports/
 
 [bold]Comandos[/]
   !ajuda | !sair | !notas [n] | !hoje
@@ -282,6 +286,11 @@ def _cmd_liga(data_dir, arg: str) -> None:
         console.print(f"[green]✓[/] Ligação: {parts[0]} ↔ {parts[1]}")
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/]")
+
+
+def _cmd_exportar(data_dir) -> None:
+    path = export_acervo(data_dir)
+    console.print(f"[green]✓[/] Backup em:\n[dim]{path}[/]")
 
 
 def _cmd_web() -> None:
@@ -523,7 +532,13 @@ def main() -> None:
             continue
 
         if low == "!modelo":
-            console.print(f"Modelo: [cyan]{model}[/]")
+            resolved = resolve_chat_model(cfg)
+            console.print(f"Config: [dim]{model}[/]")
+            console.print(f"Em uso: [cyan]{resolved}[/]")
+            continue
+
+        if low == "!exportar":
+            _cmd_exportar(data_dir)
             continue
 
         if low.startswith("!notas"):

@@ -46,6 +46,27 @@ def health_check(base_url: str, timeout: float = 5) -> bool:
         return False
 
 
+def resolve_chat_model(cfg: dict) -> str:
+    """Usa model_default se existir no Ollama; senão o primeiro disponível."""
+    preferred = str(cfg.get("ollama", {}).get("model_default", "")).strip()
+    base = str(cfg.get("ollama", {}).get("base_url", "http://127.0.0.1:11434"))
+    if not preferred or not health_check(base, timeout=3):
+        return preferred or "llama3.2:3b"
+    try:
+        models = list_models(base)
+    except OllamaError:
+        return preferred
+    if not models:
+        return preferred
+    if preferred in models:
+        return preferred
+    base_name = preferred.split(":")[0]
+    for name in models:
+        if name == base_name or name.startswith(base_name + ":"):
+            return name
+    return models[0]
+
+
 def list_models(base_url: str, timeout: float = 10) -> list[str]:
     data = _request(base_url, "/api/tags", timeout=timeout)
     models = data.get("models") or []

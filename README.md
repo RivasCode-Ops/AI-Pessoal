@@ -55,6 +55,8 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Estado
 
+**v1.0.0** — Marco de uso diário: modelo Ollama auto-detectado (`llama3.2:3b`), indexação de conversa após chat (semântica on), backup `!exportar`, Cortana import na web.
+
 **v0.9.0** — **Ponte Cortana**: `cortana: pergunta` pesquisa na web (Cortana :8787) e grava `aprendi:` com fontes. `!cortana import ID` para pesquisas já concluídas.
 
 **v0.8.0** — **Conversas no índice semântico**: histórico JSONL entra em `!indexar`; busca e chat recuperam perguntas/respostas passadas.
