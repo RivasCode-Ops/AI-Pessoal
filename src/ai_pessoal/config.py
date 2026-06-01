@@ -47,7 +47,7 @@ def resolve_data_dir(cfg: dict[str, Any]) -> Path:
 
 
 def ensure_data_layout(data_dir: Path) -> None:
-    for sub in ("capture", "sessions", "memory"):
+    for sub in ("capture", "sessions", "memory", "links"):
         (data_dir / "data" / sub).mkdir(parents=True, exist_ok=True)
 
 

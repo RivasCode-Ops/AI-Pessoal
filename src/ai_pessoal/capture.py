@@ -86,6 +86,10 @@ def _parse_meta_from_body(kind: str, body: str) -> tuple[str, dict[str, str]]:
         if kind == "aprendi" and low.startswith("fonte:"):
             extra["fonte"] = line.split(":", 1)[1].strip()
             continue
+        if low.startswith("ref:") or low.startswith("liga:") or low.startswith("relaciona:"):
+            key = low.split(":", 1)[0]
+            extra[key] = line.split(":", 1)[1].strip()
+            continue
         kept.append(line)
     clean = "\n".join(kept).strip() or body.strip()
     return clean, extra
@@ -107,7 +111,21 @@ def save_capture(data_dir: Path, kind: str, body: str) -> CaptureEntry:
         fm_lines.append(f"{key}: {val}")
     frontmatter = "---\n" + "\n".join(fm_lines) + "\n---\n\n"
     dest.write_text(frontmatter + clean_body + "\n", encoding="utf-8")
-    return CaptureEntry(id=entry_id, type=kind, body=clean_body, created=now, path=dest)
+    entry = CaptureEntry(id=entry_id, type=kind, body=clean_body, created=now, path=dest)
+    _apply_links_from_meta(data_dir, entry_id, extra)
+    return entry
+
+
+def _apply_links_from_meta(data_dir: Path, entry_id: str, extra: dict[str, str]) -> None:
+    from ai_pessoal.relate import add_link
+
+    for key in ("ref", "liga", "relaciona"):
+        target = extra.get(key, "").strip()
+        if target:
+            try:
+                add_link(data_dir, entry_id, target, relation=key)
+            except FileNotFoundError:
+                pass
 
 
 def _read_frontmatter(path: Path) -> tuple[dict[str, str], str]:

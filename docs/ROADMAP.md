@@ -26,6 +26,13 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - Consultas por projeto (Revigor, Master Chip, etc.)
 - “por que decidi…”, “o que aprendi sobre…”
 
+## Relacionar ✅ (v0.3.0)
+
+- Links explícitos (`!liga`, `ref:` / `liga:` na captura)
+- `relacionados: projeto|id`
+- Mesmo `projeto:` no frontmatter
+- Contexto de conversa inclui conexões
+
 ## v1.1 (prioridade alta, logo após MVP)
 
 - Decisões e aprendizados maduros

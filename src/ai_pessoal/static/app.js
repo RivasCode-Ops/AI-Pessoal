@@ -97,6 +97,16 @@ el("btnProfile").onclick = async () => {
   el("profileOut").textContent = r.markdown.replace(/^# /gm, "").replace(/\*\*/g, "");
 };
 
+el("btnRelated").onclick = async () => {
+  const raw = el("relatedInput").value.trim();
+  if (!raw) return;
+  const params = new URLSearchParams();
+  if (raw.includes("-") && /\d{8}-/.test(raw)) params.set("id", raw);
+  else params.set("project", raw);
+  const r = await api(`/api/related?${params}`);
+  el("relatedOut").textContent = r.markdown.replace(/\*\*/g, "");
+};
+
 el("btnRefresh").onclick = loadRecent;
 
 loadStatus();

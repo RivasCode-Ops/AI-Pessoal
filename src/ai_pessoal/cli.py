@@ -7,7 +7,8 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from ai_pessoal import __version__
-from ai_pessoal.capture import list_captures, parse_capture_line, save_capture, search_captures
+from ai_pessoal.capture import capture_dir, list_captures, parse_capture_line, save_capture, search_captures
+from ai_pessoal.relate import add_link, format_related_markdown, gather_related
 from ai_pessoal.chat import run_chat
 from ai_pessoal.config import load_config
 from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
@@ -18,6 +19,7 @@ console = Console()
 
 _SEARCH_RE = re.compile(r"^buscar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _PROJETO_BUSCA_RE = re.compile(r"^projeto\s*:\s*(.+)$", re.IGNORECASE)
+_RELACIONADOS_RE = re.compile(r"^relacionados\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 
 
 def _help_text() -> str:
@@ -43,10 +45,20 @@ def _help_text() -> str:
   !memoria
   !projetos
 
+[bold]Relacionar[/]
+  relacionados: Revigor
+  relacionados: 20260601-120000-nota
+  !relacionados [projeto ou id]
+  !liga id_origem id_destino
+
+  Na captura, vincule com:
+    ref: 20260601-120000-nota
+    projeto: Revigor
+
 [bold]Comandos[/]
   !ajuda | !sair | !notas [n] | !hoje
   !buscar termo | buscar: termo | projeto: Nome
-  !modelo | !ollama | !web  (instruções interface web)
+  !modelo | !ollama | !web
 """
 
 
@@ -149,6 +161,34 @@ def _cmd_projetos(data_dir) -> None:
         console.print("[yellow]Nenhum projeto registrado (projeto: Nome).[/]")
         return
     console.print("[bold]Projetos:[/] " + ", ".join(names))
+
+
+def _cmd_relacionados(data_dir, arg: str) -> None:
+    raw = arg.strip()
+    if not raw:
+        recent = list_captures(data_dir, limit=1)
+        if not recent:
+            console.print("[yellow]Nenhuma captura para relacionar.[/]")
+            return
+        entries = gather_related(data_dir, entry_id=recent[0].id)
+    elif (capture_dir(data_dir) / f"{raw}.md").exists():
+        entries = gather_related(data_dir, entry_id=raw)
+    else:
+        entries = gather_related(data_dir, project=raw)
+    console.print(Markdown(format_related_markdown(data_dir, entries)))
+    console.print()
+
+
+def _cmd_liga(data_dir, arg: str) -> None:
+    parts = arg.strip().split()
+    if len(parts) != 2:
+        console.print("[yellow]Uso: !liga id_origem id_destino[/]")
+        return
+    try:
+        add_link(data_dir, parts[0], parts[1])
+        console.print(f"[green]✓[/] Ligação: {parts[0]} ↔ {parts[1]}")
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/]")
 
 
 def _cmd_web() -> None:
@@ -262,6 +302,19 @@ def main() -> None:
 
         if low.startswith("!buscar"):
             _cmd_buscar(data_dir, line[7:])
+            continue
+
+        if low.startswith("!relacionados"):
+            _cmd_relacionados(data_dir, line[13:])
+            continue
+
+        if low.startswith("!liga"):
+            _cmd_liga(data_dir, line[5:])
+            continue
+
+        m_rel = _RELACIONADOS_RE.match(line)
+        if m_rel:
+            _cmd_relacionados(data_dir, m_rel.group(1))
             continue
 
         m_search = _SEARCH_RE.match(line)

@@ -11,12 +11,13 @@ from ai_pessoal.capture import list_captures, parse_capture_line, save_capture, 
 from ai_pessoal.chat import run_chat
 from ai_pessoal.config import load_config
 from ai_pessoal.memory import format_who_am_i
+from ai_pessoal.relate import format_related_markdown, gather_related
 from ai_pessoal.ollama_client import OllamaError, health_check
 from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.2.0")
+app = FastAPI(title="AI-Pessoal", version="0.3.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -95,6 +96,35 @@ def api_search(q: str = "", project: str = ""):
 def api_profile():
     _, data_dir = load_config()
     return {"markdown": format_who_am_i(data_dir)}
+
+
+@app.get("/api/related")
+def api_related(
+    id: str = "",
+    project: str = "",
+    q: str = "",
+    limit: int = 20,
+):
+    _, data_dir = load_config()
+    entries = gather_related(
+        data_dir,
+        entry_id=id or None,
+        project=project or None,
+        query=q or None,
+        limit=min(limit, 50),
+    )
+    return {
+        "markdown": format_related_markdown(data_dir, entries),
+        "items": [
+            {
+                "id": e.id,
+                "type": e.type_label,
+                "body": e.body,
+                "created": e.created.isoformat(),
+            }
+            for e in entries
+        ],
+    }
 
 
 @app.post("/api/chat")
