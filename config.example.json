@@ -1,0 +1,31 @@
+{
+  "app": {
+    "name": "AI-Pessoal",
+    "language": "pt-BR",
+    "data_dir": "~/.ai-pessoal"
+  },
+  "ollama": {
+    "base_url": "http://127.0.0.1:11434",
+    "model_default": "qwen2.5:7b",
+    "model_reasoning": null,
+    "timeout_seconds": 120
+  },
+  "chat": {
+    "max_history_messages": 20,
+    "temperature": 0.7,
+    "system_prompt": "Você é o AI-Pessoal, um assistente pessoal prestativo, claro e respeitoso. Responda em português do Brasil. Não invente fatos sobre o usuário; use apenas o contexto fornecido. Se não souber, diga."
+  },
+  "modes": {
+    "note_prefix": ".",
+    "question_prefix": "?"
+  },
+  "privacy": {
+    "allow_network_tools": false,
+    "allow_shell": false
+  },
+  "features": {
+    "long_term_memory": false,
+    "semantic_search": false,
+    "reminders": false
+  }
+}
