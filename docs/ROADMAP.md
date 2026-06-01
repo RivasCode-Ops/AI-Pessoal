@@ -40,12 +40,12 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - Motivo / Risco / Fonte no contexto do chat
 - Fontes citadas após resposta (CLI + web)
 
-## v1.1 (restante)
+## Projeto ativo ✅ (v0.5.0)
 
-- Projetos como filtro global (projeto ativo em config)
-- Refinar ranking de relevância
+- `projeto ativo: Nome` / `!projeto` / web header
+- Filtra busca, recuperar, chat e capturas novas
 
-## v2
+## v2 (próximo grande passo)
 
 - PDFs + RAG
 - Busca semântica

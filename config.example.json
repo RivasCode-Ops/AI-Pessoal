@@ -27,5 +27,8 @@
     "long_term_memory": true,
     "semantic_search": false,
     "reminders": false
+  },
+  "context": {
+    "active_project": null
   }
 }

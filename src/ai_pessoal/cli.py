@@ -11,7 +11,7 @@ from ai_pessoal.capture import capture_dir, list_captures, parse_capture_line, s
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import add_link, format_related_markdown, gather_related
 from ai_pessoal.chat import run_chat
-from ai_pessoal.config import load_config
+from ai_pessoal.config import get_active_project, load_config, resolve_project, set_active_project
 from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
 from ai_pessoal.ollama_client import OllamaError, health_check, list_models
 from ai_pessoal.session import ChatSession, search_sessions, start_session
@@ -22,6 +22,7 @@ _SEARCH_RE = re.compile(r"^buscar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _PROJETO_BUSCA_RE = re.compile(r"^projeto\s*:\s*(.+)$", re.IGNORECASE)
 _RELACIONADOS_RE = re.compile(r"^relacionados\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _RECUPERAR_RE = re.compile(r"^recuperar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+_PROJETO_ATIVO_RE = re.compile(r"^projeto\s+ativo\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 
 
 def _help_text() -> str:
@@ -48,6 +49,10 @@ def _help_text() -> str:
   ? pergunta
   ou texto livre (memória + trechos anexados à resposta)
 
+[bold]Projeto ativo[/] (filtra busca, recuperar e chat)
+  projeto ativo: Revigor
+  !projeto Revigor | !projeto limpar | !projeto
+
 [bold]Perfil[/]
   quem sou eu?
   !memoria
@@ -70,14 +75,17 @@ def _help_text() -> str:
 """
 
 
-def _print_banner(data_dir, model: str, ollama_ok: bool) -> None:
+def _print_banner(cfg, data_dir, model: str, ollama_ok: bool) -> None:
     status = "[green]Ollama OK[/]" if ollama_ok else "[red]Ollama offline[/]"
     n = len(list_captures(data_dir, limit=500))
+    active = get_active_project(cfg)
+    proj_line = f"\nProjeto ativo: [cyan]{active}[/]" if active else "\nProjeto ativo: [dim]nenhum[/]"
     console.print(
         Panel(
             f"[bold]AI-Pessoal[/] v{__version__} — segundo cérebro local\n"
             f"Dados: [dim]{data_dir}[/]\n"
-            f"Modelo: [cyan]{model}[/] · {status} · [dim]{n} capturas[/]",
+            f"Modelo: [cyan]{model}[/] · {status} · [dim]{n} capturas[/]"
+            f"{proj_line}",
             border_style="blue",
         )
     )
@@ -121,8 +129,9 @@ def _cmd_hoje(data_dir) -> None:
         console.print(_format_capture_row(e))
 
 
-def _cmd_buscar(data_dir, query: str) -> None:
-    q, project = _parse_buscar_query(query)
+def _cmd_buscar(cfg, data_dir, query: str) -> None:
+    q, explicit = _parse_buscar_query(query)
+    project = resolve_project(cfg, explicit)
     if not q and not project:
         console.print("[yellow]Uso: buscar: termo  |  projeto: Nome  |  !buscar termo[/]")
         return
@@ -169,6 +178,25 @@ def _cmd_projetos(data_dir) -> None:
         console.print("[yellow]Nenhum projeto registrado (projeto: Nome).[/]")
         return
     console.print("[bold]Projetos:[/] " + ", ".join(names))
+
+
+def _cmd_projeto_ativo(cfg, data_dir, arg: str) -> str:
+    """Define ou limpa projeto ativo; retorna cfg atualizado."""
+    raw = arg.strip()
+    if not raw:
+        active = get_active_project(cfg)
+        if active:
+            console.print(f"[cyan]Projeto ativo:[/] {active}")
+        else:
+            console.print("[dim]Nenhum projeto ativo. Use: projeto ativo: Nome[/]")
+        return cfg
+    if raw.lower() in ("limpar", "clear", "off", "nenhum", "-"):
+        cfg = set_active_project(data_dir, None)
+        console.print("[green]✓[/] Projeto ativo removido.")
+        return cfg
+    cfg = set_active_project(data_dir, raw)
+    console.print(f"[green]✓[/] Projeto ativo: [cyan]{raw}[/]")
+    return cfg
 
 
 def _cmd_relacionados(data_dir, arg: str) -> None:
@@ -219,12 +247,14 @@ def _is_who_am_i(text: str) -> bool:
     )
 
 
-def _cmd_recuperar(data_dir, query: str) -> None:
+def _cmd_recuperar(cfg, data_dir, query: str) -> None:
     q = query.strip()
     if not q:
         console.print("[yellow]Ex.: recuperar: marketing · por que decidi X[/]")
         return
-    entries, intent = retrieve_for_query(data_dir, q)
+    entries, intent = retrieve_for_query(
+        data_dir, q, active_project=get_active_project(cfg)
+    )
     console.print(Markdown(format_retrieval_markdown(entries, intent)))
     console.print()
 
@@ -255,7 +285,7 @@ def main() -> None:
     question_prefix = str(cfg.get("modes", {}).get("question_prefix", "?"))
 
     ollama_ok = health_check(str(ollama["base_url"]))
-    _print_banner(data_dir, model, ollama_ok)
+    _print_banner(cfg, data_dir, model, ollama_ok)
     session = start_session(data_dir)
 
     while True:
@@ -325,8 +355,17 @@ def main() -> None:
             _cmd_hoje(data_dir)
             continue
 
+        if low.startswith("!projeto"):
+            cfg = _cmd_projeto_ativo(cfg, data_dir, line[8:])
+            continue
+
+        m_ativo = _PROJETO_ATIVO_RE.match(line)
+        if m_ativo:
+            cfg = _cmd_projeto_ativo(cfg, data_dir, m_ativo.group(1))
+            continue
+
         if low.startswith("!buscar"):
-            _cmd_buscar(data_dir, line[7:])
+            _cmd_buscar(cfg, data_dir, line[7:])
             continue
 
         if low.startswith("!relacionados"):
@@ -344,21 +383,21 @@ def main() -> None:
 
         m_rec = _RECUPERAR_RE.match(line)
         if m_rec:
-            _cmd_recuperar(data_dir, m_rec.group(1))
+            _cmd_recuperar(cfg, data_dir, m_rec.group(1))
             continue
 
         if low.startswith("!recuperar"):
-            _cmd_recuperar(data_dir, line[10:])
+            _cmd_recuperar(cfg, data_dir, line[10:])
             continue
 
         m_search = _SEARCH_RE.match(line)
         if m_search:
-            _cmd_buscar(data_dir, m_search.group(1))
+            _cmd_buscar(cfg, data_dir, m_search.group(1))
             continue
 
         m_proj = _PROJETO_BUSCA_RE.match(line)
         if m_proj:
-            _cmd_buscar(data_dir, line)
+            _cmd_buscar(cfg, data_dir, line)
             continue
 
         parsed = parse_capture_line(line)
@@ -367,7 +406,9 @@ def main() -> None:
             if not body:
                 console.print("[yellow]Escreva algo após o prefixo.[/]")
                 continue
-            entry = save_capture(data_dir, kind, body)
+            entry = save_capture(
+                data_dir, kind, body, active_project=get_active_project(cfg)
+            )
             console.print(f"[green]✓[/] {entry.type_label} → [dim]{entry.path.name}[/]")
             continue
 

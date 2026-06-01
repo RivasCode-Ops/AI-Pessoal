@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from ai_pessoal.config import get_active_project
 from ai_pessoal.memory import build_memory_context
 from ai_pessoal.recover import RetrievalIntent, format_context_block, retrieve_for_query
 from ai_pessoal.capture import CaptureEntry
@@ -17,16 +18,21 @@ def compose_system_prompt(
     *,
     entries: list[CaptureEntry] | None = None,
     intent: RetrievalIntent | None = None,
+    active_project: str | None = None,
 ) -> str:
     blocks = [base.strip()]
     mem = build_memory_context(data_dir)
     if mem:
         blocks.append(mem)
     if entries is None:
-        entries, intent = retrieve_for_query(data_dir, user_query, limit=8)
+        entries, intent = retrieve_for_query(
+            data_dir, user_query, limit=8, active_project=active_project
+        )
     rel = format_context_block(entries, intent)
     if rel:
         blocks.append(rel)
+    if active_project:
+        blocks.append(f"Filtro: projeto ativo «{active_project}».")
     blocks.append(
         "Regras: use apenas o contexto acima sobre o usuário. "
         "Se não houver dado, diga que não está registrado. Não invente biografia."
@@ -54,9 +60,17 @@ def run_chat(
             "Ollama não está acessível. Inicie com 'ollama serve' ou ajuste config.json."
         )
 
-    entries, intent = retrieve_for_query(data_dir, user_text, limit=8)
+    active = get_active_project(cfg)
+    entries, intent = retrieve_for_query(
+        data_dir, user_text, limit=8, active_project=active
+    )
     system = compose_system_prompt(
-        base_system, data_dir, user_text, entries=entries, intent=intent
+        base_system,
+        data_dir,
+        user_text,
+        entries=entries,
+        intent=intent,
+        active_project=active,
     )
     session.append("user", user_text)
     messages = [{"role": "system", "content": system}]

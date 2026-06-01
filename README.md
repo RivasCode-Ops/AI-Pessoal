@@ -45,6 +45,7 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 | `quem sou eu?` | Perfil só do registrado |
 | `!memoria` / `!projetos` | Fatos, prefs, projetos |
 | `projeto: Revigor` | Busca por projeto |
+| `projeto ativo: Revigor` | Filtra tudo; capturas herdam projeto |
 | `recuperar: termo` | Acervo sem IA (ou `!recuperar`) |
 | `?por que decidi X` | Conversa com decisões no contexto |
 | `relacionados: Revigor` | Conexões (projeto + links + ref:) |
@@ -54,6 +55,8 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Estado
 
-**v0.4.0** — **Recuperar** maduro: consultas por intenção (`por que decidi…`, `o que aprendi…`), `recuperar:`, trechos citados no chat (CLI + web).
+**v0.5.0** — **Projeto ativo**: `projeto ativo: Revigor` filtra busca, recuperar e chat; novas capturas herdam o projeto.
+
+**v0.4.0** — Recuperar: intenção, `recuperar:`, fontes no chat.
 
 **v0.3.0** — Relacionar: links, `relacionados:`, grafo por projeto.

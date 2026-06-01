@@ -24,11 +24,32 @@ async function loadStatus() {
   try {
     const h = await api("/api/health");
     const ollama = h.ollama ? "Ollama OK" : "Ollama offline";
-    el("status").textContent = `${ollama} · ${h.model}`;
+    const proj = h.active_project ? ` · projeto: ${h.active_project}` : "";
+    el("status").textContent = `${ollama} · ${h.model}${proj}`;
+    if (h.active_project) el("activeProject").value = h.active_project;
   } catch {
     el("status").textContent = "API indisponível — rode python -m ai_pessoal.web";
   }
 }
+
+el("btnActiveProject").onclick = async () => {
+  const name = el("activeProject").value.trim();
+  if (!name) return;
+  await api("/api/active-project", {
+    method: "PUT",
+    body: JSON.stringify({ name }),
+  });
+  loadStatus();
+};
+
+el("btnClearProject").onclick = async () => {
+  await api("/api/active-project", {
+    method: "PUT",
+    body: JSON.stringify({ name: null }),
+  });
+  el("activeProject").value = "";
+  loadStatus();
+};
 
 async function loadRecent() {
   const items = await api("/api/captures?limit=15");

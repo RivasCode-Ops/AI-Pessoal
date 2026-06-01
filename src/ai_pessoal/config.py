@@ -30,7 +30,39 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "semantic_search": False,
         "reminders": False,
     },
+    "context": {
+        "active_project": None,
+    },
 }
+
+
+def get_active_project(cfg: dict[str, Any]) -> str | None:
+    raw = cfg.get("context", {}).get("active_project")
+    if raw is None:
+        return None
+    name = str(raw).strip()
+    return name or None
+
+
+def set_active_project(data_dir: Path, name: str | None) -> dict[str, Any]:
+    config_path = data_dir / "config.json"
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    ctx = cfg.setdefault("context", {})
+    if name is None or not str(name).strip():
+        ctx["active_project"] = None
+    else:
+        ctx["active_project"] = str(name).strip()
+    config_path.write_text(
+        json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return cfg
+
+
+def resolve_project(cfg: dict[str, Any], explicit: str | None = None) -> str | None:
+    if explicit is not None and str(explicit).strip():
+        return str(explicit).strip()
+    return get_active_project(cfg)
 
 
 def project_root() -> Path:

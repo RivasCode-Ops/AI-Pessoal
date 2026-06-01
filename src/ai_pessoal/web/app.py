@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from ai_pessoal.capture import list_captures, parse_capture_line, save_capture, search_captures
 from ai_pessoal.chat import run_chat
-from ai_pessoal.config import load_config
+from ai_pessoal.config import get_active_project, load_config, resolve_project, set_active_project
 from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import format_related_markdown, gather_related
@@ -18,7 +18,7 @@ from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.4.0")
+app = FastAPI(title="AI-Pessoal", version="0.5.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -31,6 +31,10 @@ class CaptureIn(BaseModel):
 class ChatIn(BaseModel):
     message: str = Field(..., min_length=1)
     session_id: str | None = None
+
+
+class ActiveProjectIn(BaseModel):
+    name: str | None = None
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -50,6 +54,7 @@ def api_health():
         "ollama": health_check(base),
         "data_dir": str(data_dir),
         "model": cfg["ollama"]["model_default"],
+        "active_project": get_active_project(cfg),
     }
 
 
@@ -78,15 +83,18 @@ def api_capture(body: CaptureIn):
             "Use prefixo: nota:, ideia:, decisão:, fato:, pref:, projeto:, aprendi:",
         )
     kind, text = parsed
-    _, data_dir = load_config()
-    entry = save_capture(data_dir, kind, text)
+    cfg, data_dir = load_config()
+    entry = save_capture(
+        data_dir, kind, text, active_project=get_active_project(cfg)
+    )
     return {"ok": True, "id": entry.id, "type": entry.type_label}
 
 
 @app.get("/api/search")
 def api_search(q: str = "", project: str = ""):
-    _, data_dir = load_config()
-    hits = search_captures(data_dir, q, project=project or None, limit=25)
+    cfg, data_dir = load_config()
+    proj = resolve_project(cfg, project or None)
+    hits = search_captures(data_dir, q, project=proj, limit=25)
     return [
         {"id": e.id, "type": e.type_label, "body": e.body, "created": e.created.isoformat()}
         for e in hits
@@ -128,10 +136,28 @@ def api_related(
     }
 
 
+@app.get("/api/active-project")
+def api_get_active_project():
+    cfg, _ = load_config()
+    return {"name": get_active_project(cfg)}
+
+
+@app.put("/api/active-project")
+def api_set_active_project(body: ActiveProjectIn):
+    _, data_dir = load_config()
+    name = body.name
+    if name is not None and str(name).strip().lower() in ("", "limpar", "clear", "off"):
+        name = None
+    cfg = set_active_project(data_dir, name)
+    return {"name": get_active_project(cfg)}
+
+
 @app.get("/api/recover")
 def api_recover(q: str = "", limit: int = 15):
-    _, data_dir = load_config()
-    entries, intent = retrieve_for_query(data_dir, q, limit=min(limit, 50))
+    cfg, data_dir = load_config()
+    entries, intent = retrieve_for_query(
+        data_dir, q, limit=min(limit, 50), active_project=get_active_project(cfg)
+    )
     return {
         "markdown": format_retrieval_markdown(entries, intent),
         "items": [

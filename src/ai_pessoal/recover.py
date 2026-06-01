@@ -105,11 +105,12 @@ def retrieve_for_query(
     query: str,
     *,
     limit: int = 12,
+    active_project: str | None = None,
 ) -> tuple[list[CaptureEntry], RetrievalIntent | None]:
     intent = parse_retrieval_intent(query)
     topic = intent.topic if intent else query.strip()
     kind = intent.kind if intent else None
-    project = intent.project if intent else None
+    project = (intent.project if intent else None) or active_project
 
     if not topic and not project:
         return [], intent

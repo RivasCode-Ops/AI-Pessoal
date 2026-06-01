@@ -95,11 +95,19 @@ def _parse_meta_from_body(kind: str, body: str) -> tuple[str, dict[str, str]]:
     return clean, extra
 
 
-def save_capture(data_dir: Path, kind: str, body: str) -> CaptureEntry:
+def save_capture(
+    data_dir: Path,
+    kind: str,
+    body: str,
+    *,
+    active_project: str | None = None,
+) -> CaptureEntry:
     if kind not in CAPTURE_TYPES:
         raise ValueError(f"Tipo inválido: {kind}")
 
     clean_body, extra = _parse_meta_from_body(kind, body)
+    if active_project and kind != "projeto" and "projeto" not in extra:
+        extra["projeto"] = active_project
     now = datetime.now().astimezone()
     entry_id = now.strftime("%Y%m%d-%H%M%S") + f"-{kind}"
     folder = capture_dir(data_dir)

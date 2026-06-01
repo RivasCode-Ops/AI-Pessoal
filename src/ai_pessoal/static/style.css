@@ -27,6 +27,23 @@ h1 { margin: 0; font-size: 1.5rem; }
 .tagline { margin: 0.25rem 0 0; color: var(--muted); font-size: 0.9rem; }
 .status { margin-top: 0.5rem; font-size: 0.85rem; }
 
+.active-project {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.active-project label { color: var(--muted); }
+
+.active-project input {
+  flex: 1;
+  min-width: 140px;
+  max-width: 220px;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
