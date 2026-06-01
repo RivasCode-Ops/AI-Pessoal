@@ -17,7 +17,7 @@ def test_retrieve_decision_with_motivo(tmp_path: Path):
         "decisao",
         "sair da empresa X\nMotivo: cultura tóxica\nRisco: período sem renda",
     )
-    entries, intent = retrieve_for_query(tmp_path, "por que decidi sair da empresa")
+    entries, intent, _docs = retrieve_for_query(tmp_path, "por que decidi sair da empresa")
     assert intent is not None
     assert len(entries) >= 1
     assert "empresa" in entries[0].body.lower()

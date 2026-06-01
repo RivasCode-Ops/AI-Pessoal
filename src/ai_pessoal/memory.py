@@ -64,10 +64,23 @@ def build_memory_context(data_dir: Path, *, max_items: int = 15) -> str:
     return "Memória registrada do usuário:\n" + "\n".join(parts)
 
 
-def build_relevant_context(data_dir: Path, query: str, *, max_items: int = 8) -> str:
-    """Trechos recuperados (intenção + busca + conexões) para a pergunta."""
-    hits, intent = retrieve_for_query(data_dir, query, limit=max_items)
-    return format_context_block(hits, intent)
+def build_relevant_context(
+    data_dir: Path,
+    query: str,
+    *,
+    max_items: int = 8,
+    cfg: dict | None = None,
+    active_project: str | None = None,
+) -> str:
+    """Trechos recuperados (intenção + busca + conexões + PDFs) para a pergunta."""
+    hits, intent, doc_hits = retrieve_for_query(
+        data_dir,
+        query,
+        limit=max_items,
+        cfg=cfg,
+        active_project=active_project,
+    )
+    return format_context_block(hits, intent, doc_hits)
 
 
 def list_projects(data_dir: Path) -> list[str]:

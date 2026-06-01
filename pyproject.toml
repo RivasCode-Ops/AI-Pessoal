@@ -1,6 +1,6 @@
 [project]
 name = "ai-pessoal"
-version = "0.6.0"
+version = "0.7.0"
 description = "Segundo cérebro local — captura, conversa Ollama, recuperação"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,6 +8,7 @@ dependencies = ["rich>=13.7.0"]
 
 [project.optional-dependencies]
 web = ["fastapi>=0.110", "uvicorn[standard]>=0.27"]
+pdf = ["pypdf>=4.0"]
 
 [project.scripts]
 ai-pessoal = "ai_pessoal.cli:main"

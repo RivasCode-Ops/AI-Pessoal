@@ -51,10 +51,17 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - Índice local `vectors.jsonl`
 - `semantico:` · `!indexar` · merge em busca/chat/recuperar
 
+## PDFs + RAG ✅ (v0.7.0)
+
+- Pasta `data/documents/*.pdf`
+- Chunks no índice semântico
+- `!docs` · `!indexar` inclui PDFs
+- Chat/recuperar citam trechos de PDF
+
 ## v2 (restante)
 
-- PDFs + RAG em documentos
-- “o que estudei sobre X?” com PDFs + conversas
+- Busca semântica em histórico de conversas (JSONL)
+- Integração Cortana (web → `aprendi:`)
 
 ## v3+ (só com coração sólido)
 

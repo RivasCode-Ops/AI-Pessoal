@@ -37,7 +37,7 @@ def test_retrieve_uses_active_project(tmp_path: Path):
     save_capture(d, "decisao", "usar Ollama\nMotivo: privacidade\nprojeto: Revigor")
     save_capture(d, "fato", "comprei carro novo")
 
-    entries, _ = retrieve_for_query(d, "ollama", active_project="Revigor", limit=10)
+    entries, _, _docs = retrieve_for_query(d, "ollama", active_project="Revigor", limit=10)
     bodies = " ".join(e.body.lower() for e in entries)
     assert "ollama" in bodies
     assert "carro" not in bodies

@@ -38,6 +38,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "min_score": 0.35,
         "max_results": 12,
     },
+    "documents": {
+        "chunk_chars": 900,
+        "chunk_overlap": 120,
+    },
 }
 
 
@@ -99,7 +103,7 @@ def resolve_data_dir(cfg: dict[str, Any]) -> Path:
 
 
 def ensure_data_layout(data_dir: Path) -> None:
-    for sub in ("capture", "sessions", "memory", "links", "embeddings"):
+    for sub in ("capture", "sessions", "memory", "links", "embeddings", "documents"):
         (data_dir / "data" / sub).mkdir(parents=True, exist_ok=True)
 
 

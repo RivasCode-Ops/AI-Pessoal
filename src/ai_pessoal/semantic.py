@@ -17,6 +17,18 @@ from ai_pessoal.ollama_client import OllamaError, embed_text
 
 
 @dataclass
+class ScoredHit:
+    hit_id: str
+    score: float
+    source_type: str  # capture | document
+    label: str
+    text: str
+    entry: CaptureEntry | None = None
+    document: str | None = None
+
+
+# Compatibilidade com código que usa ScoredEntry
+@dataclass
 class ScoredEntry:
     entry: CaptureEntry
     score: float
@@ -28,6 +40,13 @@ def embed_model(cfg: dict[str, Any]) -> str:
 
 def min_score(cfg: dict[str, Any]) -> float:
     return float(cfg.get("semantic", {}).get("min_score", 0.35))
+
+
+def chunk_settings(cfg: dict[str, Any]) -> tuple[int, int]:
+    doc = cfg.get("documents", {})
+    size = int(doc.get("chunk_chars", cfg.get("semantic", {}).get("chunk_chars", 900)))
+    overlap = int(doc.get("chunk_overlap", cfg.get("semantic", {}).get("chunk_overlap", 120)))
+    return max(200, size), max(0, overlap)
 
 
 def index_path(data_dir: Path) -> Path:
@@ -56,7 +75,7 @@ def _entry_project(entry: CaptureEntry) -> str:
     return ""
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
+def cosine_similarity(a: list[float], b: list[float]) -> float:
     if len(a) != len(b) or not a:
         return 0.0
     dot = sum(x * y for x, y in zip(a, b, strict=True))
@@ -67,7 +86,10 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb)
 
 
-def _load_index_rows(data_dir: Path, model: str) -> dict[str, dict[str, Any]]:
+_cosine = cosine_similarity
+
+
+def load_all_index_rows(data_dir: Path, model: str) -> dict[str, dict[str, Any]]:
     path = index_path(data_dir)
     if not path.exists():
         return {}
@@ -82,16 +104,20 @@ def _load_index_rows(data_dir: Path, model: str) -> dict[str, dict[str, Any]]:
             continue
         if str(row.get("model", "")) != model:
             continue
-        entry_id = str(row.get("id", ""))
-        if entry_id:
-            rows[entry_id] = row
+        row_id = str(row.get("id", ""))
+        if row_id:
+            rows[row_id] = row
     return rows
 
 
-def _write_index_rows(data_dir: Path, rows: dict[str, dict[str, Any]]) -> None:
+def save_index_rows(data_dir: Path, rows: dict[str, dict[str, Any]]) -> None:
     path = index_path(data_dir)
     lines = [json.dumps(rows[k], ensure_ascii=False) for k in sorted(rows)]
     path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
+_load_index_rows = load_all_index_rows
+_write_index_rows = save_index_rows
 
 
 def index_entry(
@@ -101,14 +127,13 @@ def index_entry(
     *,
     force: bool = False,
 ) -> bool:
-    """Indexa uma captura. Retorna True se indexou."""
     if not is_semantic_enabled(cfg):
         return False
     model = embed_model(cfg)
     base = str(cfg["ollama"]["base_url"])
     timeout = float(cfg["ollama"].get("timeout_seconds", 120))
     mtime = entry.path.stat().st_mtime
-    rows = _load_index_rows(data_dir, model)
+    rows = load_all_index_rows(data_dir, model)
     prev = rows.get(entry.id)
     if not force and prev and float(prev.get("mtime", 0)) == mtime:
         return False
@@ -123,17 +148,17 @@ def index_entry(
 
     rows[entry.id] = {
         "id": entry.id,
+        "kind": "capture",
         "model": model,
         "mtime": mtime,
         "vector": vector,
         "projeto": _entry_project(entry),
     }
-    _write_index_rows(data_dir, rows)
+    save_index_rows(data_dir, rows)
     return True
 
 
 def index_all(data_dir: Path, cfg: dict[str, Any]) -> tuple[int, int]:
-    """Reindexa todas as capturas. Retorna (ok, total)."""
     entries = list_captures(data_dir, limit=10_000)
     ok = 0
     for entry in entries:
@@ -142,7 +167,7 @@ def index_all(data_dir: Path, cfg: dict[str, Any]) -> tuple[int, int]:
     return ok, len(entries)
 
 
-def semantic_search(
+def search_index(
     data_dir: Path,
     cfg: dict[str, Any],
     query: str,
@@ -150,7 +175,7 @@ def semantic_search(
     limit: int = 10,
     project: str | None = None,
     kind: str | None = None,
-) -> list[ScoredEntry]:
+) -> list[ScoredHit]:
     if not is_semantic_enabled(cfg):
         return []
     q = query.strip()
@@ -167,21 +192,39 @@ def semantic_search(
     except OllamaError:
         return []
 
-    rows = _load_index_rows(data_dir, model)
+    rows = load_all_index_rows(data_dir, model)
     if not rows:
         return []
 
     proj = (project or "").strip().lower()
-    scored: list[ScoredEntry] = []
+    scored: list[ScoredHit] = []
 
-    for entry_id, row in rows.items():
+    for row_id, row in rows.items():
         vec = row.get("vector")
         if not isinstance(vec, list):
             continue
-        score = _cosine(qvec, [float(x) for x in vec])
+        score = cosine_similarity(qvec, [float(x) for x in vec])
         if score < threshold:
             continue
-        path = capture_dir(data_dir) / f"{entry_id}.md"
+
+        row_kind = str(row.get("kind", "capture"))
+        if row_kind == "document":
+            source = str(row.get("source", "documento"))
+            text = str(row.get("text", ""))
+            chunk_i = int(row.get("chunk_index", 0))
+            scored.append(
+                ScoredHit(
+                    hit_id=row_id,
+                    score=score,
+                    source_type="document",
+                    label=f"PDF {source} §{chunk_i + 1}",
+                    text=text,
+                    document=source,
+                )
+            )
+            continue
+
+        path = capture_dir(data_dir) / f"{row_id}.md"
         if not path.exists():
             continue
         try:
@@ -196,10 +239,52 @@ def semantic_search(
             if proj not in ep.lower() and proj not in blob:
                 if entry.type != "projeto" or proj not in entry.body.lower():
                     continue
-        scored.append(ScoredEntry(entry=entry, score=score))
+        scored.append(
+            ScoredHit(
+                hit_id=row_id,
+                score=score,
+                source_type="capture",
+                label=entry.type_label,
+                text=entry.body,
+                entry=entry,
+            )
+        )
 
     scored.sort(key=lambda s: s.score, reverse=True)
     return scored[:limit]
+
+
+def semantic_search(
+    data_dir: Path,
+    cfg: dict[str, Any],
+    query: str,
+    *,
+    limit: int = 10,
+    project: str | None = None,
+    kind: str | None = None,
+) -> list[ScoredEntry]:
+    """Compat: retorna só capturas."""
+    hits = search_index(data_dir, cfg, query, limit=limit, project=project, kind=kind)
+    out: list[ScoredEntry] = []
+    for h in hits:
+        if h.entry is not None:
+            out.append(ScoredEntry(entry=h.entry, score=h.score))
+    return out
+
+
+def format_hits_for_context(hits: list[ScoredHit], *, max_chars: int = 400) -> str:
+    if not hits:
+        return ""
+    lines = ["Trechos semânticos (capturas + PDFs):"]
+    for h in hits:
+        body = h.text.replace("\n", " ")
+        if len(body) > max_chars:
+            body = body[: max_chars - 3] + "..."
+        if h.source_type == "document":
+            lines.append(f"- [{h.label}] {body}")
+        else:
+            lines.append(f"- [{h.label}] {body} (id: {h.hit_id})")
+    return "\n".join(lines)
 
 
 def try_index_after_save(data_dir: Path, cfg: dict[str, Any], entry: CaptureEntry) -> None:

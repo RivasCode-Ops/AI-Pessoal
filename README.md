@@ -55,6 +55,12 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Estado
 
+**v0.7.0** — **PDFs + RAG**: coloque `.pdf` em `~/.ai-pessoal/data/documents/`, rode `!indexar`. Busca e chat incluem trechos dos PDFs.
+
+```powershell
+pip install "ai-pessoal[pdf]"
+```
+
 **v0.6.0** — **Busca semântica** (Ollama local): `semantico:`, `!indexar`, índice em `data/embeddings/`. Ative em `config.json` → `features.semantic_search`.
 
 ```powershell

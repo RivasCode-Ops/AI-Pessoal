@@ -9,7 +9,7 @@ from typing import Any
 from ai_pessoal.capture import CaptureEntry, _read_frontmatter, search_captures
 from ai_pessoal.config import is_semantic_enabled
 from ai_pessoal.relate import gather_related
-from ai_pessoal.semantic import semantic_search
+from ai_pessoal.semantic import ScoredHit, format_hits_for_context, search_index
 
 _PROJECT_TAIL_RE = re.compile(r"\s+no\s+projeto\s+(.+)$", re.IGNORECASE)
 
@@ -111,17 +111,18 @@ def retrieve_for_query(
     limit: int = 12,
     active_project: str | None = None,
     cfg: dict[str, Any] | None = None,
-) -> tuple[list[CaptureEntry], RetrievalIntent | None]:
+) -> tuple[list[CaptureEntry], RetrievalIntent | None, list[ScoredHit]]:
     intent = parse_retrieval_intent(query)
     topic = intent.topic if intent else query.strip()
     kind = intent.kind if intent else None
     project = (intent.project if intent else None) or active_project
 
     if not topic and not project:
-        return [], intent
+        return [], intent, []
 
     seen: set[str] = set()
     ordered: list[CaptureEntry] = []
+    doc_hits: list[ScoredHit] = []
 
     def add(entry: CaptureEntry | None) -> None:
         if entry is None or entry.id in seen:
@@ -131,7 +132,7 @@ def retrieve_for_query(
 
     if cfg and is_semantic_enabled(cfg) and topic:
         max_sem = int(cfg.get("semantic", {}).get("max_results", limit))
-        for scored in semantic_search(
+        for hit in search_index(
             data_dir,
             cfg,
             topic,
@@ -139,7 +140,10 @@ def retrieve_for_query(
             project=project,
             kind=kind,
         ):
-            add(scored.entry)
+            if hit.entry is not None:
+                add(hit.entry)
+            elif hit.source_type == "document":
+                doc_hits.append(hit)
 
     if project:
         for e in gather_related(data_dir, project=project, limit=limit):
@@ -162,7 +166,7 @@ def retrieve_for_query(
         for e in gather_related(data_dir, query=topic, limit=limit):
             add(e)
 
-    return ordered[:limit], intent
+    return ordered[:limit], intent, doc_hits[:limit]
 
 
 def _entry_meta(entry: CaptureEntry) -> dict[str, str]:
@@ -188,8 +192,10 @@ def format_entry_detail(entry: CaptureEntry) -> str:
 def format_retrieval_markdown(
     entries: list[CaptureEntry],
     intent: RetrievalIntent | None,
+    doc_hits: list[ScoredHit] | None = None,
 ) -> str:
-    if not entries:
+    docs = doc_hits or []
+    if not entries and not docs:
         if intent:
             return (
                 f"Nenhum registro de **{intent.label}** sobre “{intent.topic}”"
@@ -206,11 +212,19 @@ def format_retrieval_markdown(
     for e in entries:
         ts = e.created.strftime("%d/%m/%Y %H:%M")
         blocks.append(f"### {e.id} · {ts}\n\n{format_entry_detail(e)}")
+    for h in docs:
+        body = h.text.replace("\n", " ")
+        blocks.append(f"### {h.label} · {h.score:.0%}\n\n{body}")
     return title + "\n\n".join(blocks)
 
 
-def format_context_block(entries: list[CaptureEntry], intent: RetrievalIntent | None) -> str:
-    if not entries:
+def format_context_block(
+    entries: list[CaptureEntry],
+    intent: RetrievalIntent | None,
+    doc_hits: list[ScoredHit] | None = None,
+) -> str:
+    docs = doc_hits or []
+    if not entries and not docs:
         return ""
     header = "Trechos recuperados do acervo"
     if intent:
@@ -219,4 +233,6 @@ def format_context_block(entries: list[CaptureEntry], intent: RetrievalIntent | 
     for e in entries:
         detail = format_entry_detail(e).replace("\n", " ")
         lines.append(f"- {detail} (id: {e.id})")
+    if docs:
+        lines.append(format_hits_for_context(docs))
     return "\n".join(lines)

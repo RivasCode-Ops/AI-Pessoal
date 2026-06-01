@@ -16,7 +16,8 @@ from ai_pessoal.config import (
     resolve_project,
     set_active_project,
 )
-from ai_pessoal.semantic import index_all, semantic_search
+from ai_pessoal.documents import index_all_documents, list_document_sources
+from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import format_related_markdown, gather_related
@@ -25,7 +26,7 @@ from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.6.0")
+app = FastAPI(title="AI-Pessoal", version="0.7.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -110,18 +111,31 @@ def api_search(q: str = "", project: str = ""):
     seen: set[str] = set()
     out: list[dict] = []
     if is_semantic_enabled(cfg) and q:
-        for s in semantic_search(data_dir, cfg, q, limit=15, project=proj):
-            seen.add(s.entry.id)
-            out.append(
-                {
-                    "id": s.entry.id,
-                    "type": s.entry.type_label,
-                    "body": s.entry.body,
-                    "created": s.entry.created.isoformat(),
-                    "score": round(s.score, 3),
-                    "semantic": True,
-                }
-            )
+        for s in search_index(data_dir, cfg, q, limit=15, project=proj):
+            if s.entry:
+                seen.add(s.entry.id)
+                out.append(
+                    {
+                        "id": s.entry.id,
+                        "type": s.entry.type_label,
+                        "body": s.entry.body,
+                        "created": s.entry.created.isoformat(),
+                        "score": round(s.score, 3),
+                        "semantic": True,
+                    }
+                )
+            elif s.source_type == "document":
+                out.append(
+                    {
+                        "id": s.hit_id,
+                        "type": s.label,
+                        "body": s.text,
+                        "created": "",
+                        "score": round(s.score, 3),
+                        "semantic": True,
+                        "document": s.document,
+                    }
+                )
     for e in search_captures(data_dir, q, project=proj, limit=25):
         if e.id in seen:
             continue
@@ -192,7 +206,7 @@ def api_set_active_project(body: ActiveProjectIn):
 @app.get("/api/recover")
 def api_recover(q: str = "", limit: int = 15):
     cfg, data_dir = load_config()
-    entries, intent = retrieve_for_query(
+    entries, intent, doc_hits = retrieve_for_query(
         data_dir,
         q,
         limit=min(limit, 50),
@@ -200,7 +214,7 @@ def api_recover(q: str = "", limit: int = 15):
         cfg=cfg,
     )
     return {
-        "markdown": format_retrieval_markdown(entries, intent),
+        "markdown": format_retrieval_markdown(entries, intent, doc_hits),
         "items": [
             {
                 "id": e.id,
@@ -219,7 +233,14 @@ def api_semantic_index():
     if not is_semantic_enabled(cfg):
         raise HTTPException(400, "semantic_search desativado em config.json")
     ok, total = index_all(data_dir, cfg)
-    return {"indexed": ok, "total": total}
+    chunks, pdfs = index_all_documents(data_dir, cfg, force=True)
+    return {
+        "indexed": ok,
+        "total": total,
+        "doc_chunks": chunks,
+        "pdfs": pdfs,
+        "pdf_files": list_document_sources(data_dir),
+    }
 
 
 @app.get("/api/semantic/search")
@@ -227,7 +248,7 @@ def api_semantic_search(q: str = "", limit: int = 15):
     cfg, data_dir = load_config()
     if not is_semantic_enabled(cfg):
         raise HTTPException(400, "semantic_search desativado")
-    hits = semantic_search(
+    hits = search_index(
         data_dir,
         cfg,
         q,
@@ -236,10 +257,12 @@ def api_semantic_search(q: str = "", limit: int = 15):
     )
     return [
         {
-            "id": s.entry.id,
-            "type": s.entry.type_label,
-            "body": s.entry.body,
+            "id": s.hit_id,
+            "type": s.label,
+            "body": s.text,
             "score": round(s.score, 3),
+            "source": s.source_type,
+            "document": s.document,
         }
         for s in hits
     ]

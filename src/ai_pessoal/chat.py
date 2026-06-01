@@ -6,6 +6,7 @@ from typing import Any  # noqa: TC003 — used in compose_system_prompt
 from ai_pessoal.config import get_active_project
 from ai_pessoal.memory import build_memory_context
 from ai_pessoal.recover import RetrievalIntent, format_context_block, retrieve_for_query
+from ai_pessoal.semantic import ScoredHit
 from ai_pessoal.capture import CaptureEntry
 from ai_pessoal.ollama_client import OllamaError, chat, health_check
 from ai_pessoal.session import ChatSession
@@ -20,20 +21,21 @@ def compose_system_prompt(
     intent: RetrievalIntent | None = None,
     active_project: str | None = None,
     cfg: dict[str, Any] | None = None,
+    doc_hits: list[ScoredHit] | None = None,
 ) -> str:
     blocks = [base.strip()]
     mem = build_memory_context(data_dir)
     if mem:
         blocks.append(mem)
     if entries is None:
-        entries, intent = retrieve_for_query(
+        entries, intent, doc_hits = retrieve_for_query(
             data_dir,
             user_query,
             limit=8,
             active_project=active_project,
             cfg=cfg,
         )
-    rel = format_context_block(entries, intent)
+    rel = format_context_block(entries, intent, doc_hits)
     if rel:
         blocks.append(rel)
     if active_project:
@@ -66,7 +68,7 @@ def run_chat(
         )
 
     active = get_active_project(cfg)
-    entries, intent = retrieve_for_query(
+    entries, intent, doc_hits = retrieve_for_query(
         data_dir, user_text, limit=8, active_project=active, cfg=cfg
     )
     system = compose_system_prompt(
@@ -77,6 +79,7 @@ def run_chat(
         intent=intent,
         active_project=active,
         cfg=cfg,
+        doc_hits=doc_hits,
     )
     session.append("user", user_text)
     messages = [{"role": "system", "content": system}]
@@ -84,8 +87,16 @@ def run_chat(
 
     reply = chat(base, model, messages, temperature=temp, timeout=timeout)
     session.append("assistant", reply)
-    source_items = [
+    source_items: list[dict[str, str]] = [
         {"id": e.id, "type": e.type_label, "body": e.body[:200]}
         for e in entries
     ]
+    for h in doc_hits:
+        source_items.append(
+            {
+                "id": h.hit_id,
+                "type": h.label,
+                "body": h.text[:200],
+            }
+        )
     return reply, source_items

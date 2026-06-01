@@ -19,7 +19,8 @@ from ai_pessoal.config import (
     set_active_project,
     set_semantic_search,
 )
-from ai_pessoal.semantic import index_all, semantic_search
+from ai_pessoal.documents import documents_dir, index_all_documents, list_document_sources
+from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
 from ai_pessoal.ollama_client import OllamaError, health_check, list_models
 from ai_pessoal.session import ChatSession, search_sessions, start_session
@@ -52,8 +53,12 @@ def _help_text() -> str:
   recuperar: marketing
   semantico: funil de vendas  (requer !indexar + Ollama embed)
 
+[bold]PDFs[/] (pasta data/documents)
+  Coloque .pdf → !indexar (inclui docs)
+  !docs — listar PDFs na pasta
+
 [bold]Semântica[/] (Ollama nomic-embed-text)
-  !indexar — (re)indexar capturas
+  !indexar — capturas + PDFs
   !semantico on | off
 
 [bold]Conversa[/]
@@ -154,11 +159,9 @@ def _cmd_buscar(cfg, data_dir, query: str) -> None:
     sem_hits: list = []
 
     if is_semantic_enabled(cfg) and q:
-        sem_hits = semantic_search(
-            data_dir, cfg, q, limit=12, project=project
-        )
+        sem_hits = search_index(data_dir, cfg, q, limit=12, project=project)
         for s in sem_hits:
-            if s.entry.id not in seen:
+            if s.entry and s.entry.id not in seen:
                 seen.add(s.entry.id)
                 cap_hits.append(s.entry)
 
@@ -170,19 +173,18 @@ def _cmd_buscar(cfg, data_dir, query: str) -> None:
     sess_hits = search_sessions(data_dir, q) if q else []
 
     label = project or q
-    if not cap_hits and not sess_hits:
+    if not cap_hits and not sess_hits and not sem_hits:
         console.print(f"[yellow]Nada encontrado para «{label}».[/]")
         return
 
     if sem_hits:
         console.print(f"\n[bold]Semântica ({len(sem_hits)})[/]")
         for s in sem_hits:
-            body = s.entry.body.replace("\n", " ")
+            body = s.text.replace("\n", " ")
             if len(body) > 60:
                 body = body[:57] + "..."
-            console.print(
-                f"[dim]{s.score:.0%}[/] [cyan]{s.entry.type_label}[/] {body}"
-            )
+            label = s.label if s.source_type == "document" else s.entry.type_label
+            console.print(f"[dim]{s.score:.0%}[/] [cyan]{label}[/] {body}")
 
     if cap_hits:
         console.print(f"\n[bold]Capturas ({len(cap_hits)})[/]")
@@ -295,15 +297,15 @@ def _cmd_semantico(cfg, data_dir, query: str) -> None:
     if not is_semantic_enabled(cfg):
         console.print("[yellow]Ative com !semantico on e rode !indexar[/]")
         return
-    hits = semantic_search(
+    hits = search_index(
         data_dir, cfg, q, limit=15, project=get_active_project(cfg)
     )
     if not hits:
         console.print("[yellow]Nada no índice semântico. Rode !indexar[/]")
         return
     for s in hits:
-        body = s.entry.body.replace("\n", " ")[:80]
-        console.print(f"[dim]{s.score:.0%}[/] [{s.entry.type_label}] {body}")
+        body = s.text.replace("\n", " ")[:80]
+        console.print(f"[dim]{s.score:.0%}[/] [{s.label}] {body}")
 
 
 def _cmd_indexar(cfg, data_dir) -> None:
@@ -313,7 +315,22 @@ def _cmd_indexar(cfg, data_dir) -> None:
     model = cfg.get("semantic", {}).get("embed_model", "nomic-embed-text")
     with console.status(f"[cyan]Indexando com {model}…[/]"):
         ok, total = index_all(data_dir, cfg)
-    console.print(f"[green]✓[/] {ok}/{total} capturas indexadas.")
+        chunks, pdfs = index_all_documents(data_dir, cfg, force=True)
+    console.print(
+        f"[green]✓[/] {ok}/{total} capturas · {chunks} trechos em {pdfs} PDF(s)."
+    )
+    console.print(f"[dim]PDFs: {documents_dir(data_dir)}[/]")
+
+
+def _cmd_docs(data_dir) -> None:
+    names = list_document_sources(data_dir)
+    folder = documents_dir(data_dir)
+    if not names:
+        console.print(f"[yellow]Nenhum PDF em[/] {folder}")
+        return
+    console.print(f"[bold]PDFs ({len(names)}):[/]")
+    for name in names:
+        console.print(f"  · {name}")
 
 
 def _cmd_semantico_toggle(cfg, data_dir, arg: str) -> dict:
@@ -335,13 +352,13 @@ def _cmd_recuperar(cfg, data_dir, query: str) -> None:
     if not q:
         console.print("[yellow]Ex.: recuperar: marketing · por que decidi X[/]")
         return
-    entries, intent = retrieve_for_query(
+    entries, intent, doc_hits = retrieve_for_query(
         data_dir,
         q,
         active_project=get_active_project(cfg),
         cfg=cfg,
     )
-    console.print(Markdown(format_retrieval_markdown(entries, intent)))
+    console.print(Markdown(format_retrieval_markdown(entries, intent, doc_hits)))
     console.print()
 
 
@@ -478,6 +495,10 @@ def main() -> None:
 
         if low.startswith("!indexar"):
             _cmd_indexar(cfg, data_dir)
+            continue
+
+        if low == "!docs":
+            _cmd_docs(data_dir)
             continue
 
         if low.startswith("!semantico"):
