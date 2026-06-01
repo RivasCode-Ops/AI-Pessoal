@@ -4,8 +4,12 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from typing import Any
+
 from ai_pessoal.capture import CaptureEntry, _read_frontmatter, search_captures
+from ai_pessoal.config import is_semantic_enabled
 from ai_pessoal.relate import gather_related
+from ai_pessoal.semantic import semantic_search
 
 _PROJECT_TAIL_RE = re.compile(r"\s+no\s+projeto\s+(.+)$", re.IGNORECASE)
 
@@ -106,6 +110,7 @@ def retrieve_for_query(
     *,
     limit: int = 12,
     active_project: str | None = None,
+    cfg: dict[str, Any] | None = None,
 ) -> tuple[list[CaptureEntry], RetrievalIntent | None]:
     intent = parse_retrieval_intent(query)
     topic = intent.topic if intent else query.strip()
@@ -123,6 +128,18 @@ def retrieve_for_query(
             return
         seen.add(entry.id)
         ordered.append(entry)
+
+    if cfg and is_semantic_enabled(cfg) and topic:
+        max_sem = int(cfg.get("semantic", {}).get("max_results", limit))
+        for scored in semantic_search(
+            data_dir,
+            cfg,
+            topic,
+            limit=max_sem,
+            project=project,
+            kind=kind,
+        ):
+            add(scored.entry)
 
     if project:
         for e in gather_related(data_dir, project=project, limit=limit):

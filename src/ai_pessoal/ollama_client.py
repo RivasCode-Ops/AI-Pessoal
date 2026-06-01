@@ -52,6 +52,35 @@ def list_models(base_url: str, timeout: float = 10) -> list[str]:
     return [str(m.get("name", "")) for m in models if m.get("name")]
 
 
+def embed_text(
+    base_url: str,
+    model: str,
+    text: str,
+    *,
+    timeout: float = 60,
+) -> list[float]:
+    payload: dict[str, Any] = {"model": model, "input": text}
+    try:
+        data = _request(base_url, "/api/embed", method="POST", body=payload, timeout=timeout)
+        embeddings = data.get("embeddings")
+        if embeddings and isinstance(embeddings[0], list):
+            return [float(x) for x in embeddings[0]]
+    except OllamaError:
+        pass
+
+    legacy = _request(
+        base_url,
+        "/api/embeddings",
+        method="POST",
+        body={"model": model, "prompt": text},
+        timeout=timeout,
+    )
+    emb = legacy.get("embedding")
+    if not emb:
+        raise OllamaError("Resposta de embedding vazia do Ollama.")
+    return [float(x) for x in emb]
+
+
 def chat(
     base_url: str,
     model: str,

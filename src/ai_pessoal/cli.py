@@ -11,7 +11,15 @@ from ai_pessoal.capture import capture_dir, list_captures, parse_capture_line, s
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import add_link, format_related_markdown, gather_related
 from ai_pessoal.chat import run_chat
-from ai_pessoal.config import get_active_project, load_config, resolve_project, set_active_project
+from ai_pessoal.config import (
+    get_active_project,
+    is_semantic_enabled,
+    load_config,
+    resolve_project,
+    set_active_project,
+    set_semantic_search,
+)
+from ai_pessoal.semantic import index_all, semantic_search
 from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
 from ai_pessoal.ollama_client import OllamaError, health_check, list_models
 from ai_pessoal.session import ChatSession, search_sessions, start_session
@@ -23,6 +31,7 @@ _PROJETO_BUSCA_RE = re.compile(r"^projeto\s*:\s*(.+)$", re.IGNORECASE)
 _RELACIONADOS_RE = re.compile(r"^relacionados\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _RECUPERAR_RE = re.compile(r"^recuperar\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 _PROJETO_ATIVO_RE = re.compile(r"^projeto\s+ativo\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
+_SEMANTICO_RE = re.compile(r"^semantico\s*:\s*(.+)$", re.IGNORECASE | re.DOTALL)
 
 
 def _help_text() -> str:
@@ -41,9 +50,11 @@ def _help_text() -> str:
 
 [bold]Recuperar[/] (sem IA — só o acervo)
   recuperar: marketing
-  por que decidi sair da empresa
-  o que aprendi sobre vendas
-  o que anotei sobre cliente X
+  semantico: funil de vendas  (requer !indexar + Ollama embed)
+
+[bold]Semântica[/] (Ollama nomic-embed-text)
+  !indexar — (re)indexar capturas
+  !semantico on | off
 
 [bold]Conversa[/]
   ? pergunta
@@ -79,7 +90,9 @@ def _print_banner(cfg, data_dir, model: str, ollama_ok: bool) -> None:
     status = "[green]Ollama OK[/]" if ollama_ok else "[red]Ollama offline[/]"
     n = len(list_captures(data_dir, limit=500))
     active = get_active_project(cfg)
+    sem = "[green]semântica on[/]" if is_semantic_enabled(cfg) else "[dim]semântica off[/]"
     proj_line = f"\nProjeto ativo: [cyan]{active}[/]" if active else "\nProjeto ativo: [dim]nenhum[/]"
+    proj_line += f" · {sem}"
     console.print(
         Panel(
             f"[bold]AI-Pessoal[/] v{__version__} — segundo cérebro local\n"
@@ -136,13 +149,40 @@ def _cmd_buscar(cfg, data_dir, query: str) -> None:
         console.print("[yellow]Uso: buscar: termo  |  projeto: Nome  |  !buscar termo[/]")
         return
 
-    cap_hits = search_captures(data_dir, q, project=project)
+    seen: set[str] = set()
+    cap_hits: list = []
+    sem_hits: list = []
+
+    if is_semantic_enabled(cfg) and q:
+        sem_hits = semantic_search(
+            data_dir, cfg, q, limit=12, project=project
+        )
+        for s in sem_hits:
+            if s.entry.id not in seen:
+                seen.add(s.entry.id)
+                cap_hits.append(s.entry)
+
+    for e in search_captures(data_dir, q, project=project):
+        if e.id not in seen:
+            seen.add(e.id)
+            cap_hits.append(e)
+
     sess_hits = search_sessions(data_dir, q) if q else []
 
     label = project or q
     if not cap_hits and not sess_hits:
         console.print(f"[yellow]Nada encontrado para «{label}».[/]")
         return
+
+    if sem_hits:
+        console.print(f"\n[bold]Semântica ({len(sem_hits)})[/]")
+        for s in sem_hits:
+            body = s.entry.body.replace("\n", " ")
+            if len(body) > 60:
+                body = body[:57] + "..."
+            console.print(
+                f"[dim]{s.score:.0%}[/] [cyan]{s.entry.type_label}[/] {body}"
+            )
 
     if cap_hits:
         console.print(f"\n[bold]Capturas ({len(cap_hits)})[/]")
@@ -247,13 +287,59 @@ def _is_who_am_i(text: str) -> bool:
     )
 
 
+def _cmd_semantico(cfg, data_dir, query: str) -> None:
+    q = query.strip()
+    if not q:
+        console.print("[yellow]Uso: semantico: conceito ou pergunta[/]")
+        return
+    if not is_semantic_enabled(cfg):
+        console.print("[yellow]Ative com !semantico on e rode !indexar[/]")
+        return
+    hits = semantic_search(
+        data_dir, cfg, q, limit=15, project=get_active_project(cfg)
+    )
+    if not hits:
+        console.print("[yellow]Nada no índice semântico. Rode !indexar[/]")
+        return
+    for s in hits:
+        body = s.entry.body.replace("\n", " ")[:80]
+        console.print(f"[dim]{s.score:.0%}[/] [{s.entry.type_label}] {body}")
+
+
+def _cmd_indexar(cfg, data_dir) -> None:
+    if not is_semantic_enabled(cfg):
+        console.print("[yellow]Ative com !semantico on primeiro.[/]")
+        return
+    model = cfg.get("semantic", {}).get("embed_model", "nomic-embed-text")
+    with console.status(f"[cyan]Indexando com {model}…[/]"):
+        ok, total = index_all(data_dir, cfg)
+    console.print(f"[green]✓[/] {ok}/{total} capturas indexadas.")
+
+
+def _cmd_semantico_toggle(cfg, data_dir, arg: str) -> dict:
+    raw = arg.strip().lower()
+    if raw in ("on", "sim", "true", "1"):
+        cfg = set_semantic_search(data_dir, True)
+        console.print("[green]✓[/] Busca semântica ativada. Rode !indexar")
+    elif raw in ("off", "nao", "não", "false", "0"):
+        cfg = set_semantic_search(data_dir, False)
+        console.print("[green]✓[/] Busca semântica desativada.")
+    else:
+        state = "on" if is_semantic_enabled(cfg) else "off"
+        console.print(f"Semântica: [cyan]{state}[/] — !semantico on | off")
+    return cfg
+
+
 def _cmd_recuperar(cfg, data_dir, query: str) -> None:
     q = query.strip()
     if not q:
         console.print("[yellow]Ex.: recuperar: marketing · por que decidi X[/]")
         return
     entries, intent = retrieve_for_query(
-        data_dir, q, active_project=get_active_project(cfg)
+        data_dir,
+        q,
+        active_project=get_active_project(cfg),
+        cfg=cfg,
     )
     console.print(Markdown(format_retrieval_markdown(entries, intent)))
     console.print()
@@ -390,6 +476,19 @@ def main() -> None:
             _cmd_recuperar(cfg, data_dir, line[10:])
             continue
 
+        if low.startswith("!indexar"):
+            _cmd_indexar(cfg, data_dir)
+            continue
+
+        if low.startswith("!semantico"):
+            cfg = _cmd_semantico_toggle(cfg, data_dir, line[9:])
+            continue
+
+        m_sem = _SEMANTICO_RE.match(line)
+        if m_sem:
+            _cmd_semantico(cfg, data_dir, m_sem.group(1))
+            continue
+
         m_search = _SEARCH_RE.match(line)
         if m_search:
             _cmd_buscar(cfg, data_dir, m_search.group(1))
@@ -407,7 +506,11 @@ def main() -> None:
                 console.print("[yellow]Escreva algo após o prefixo.[/]")
                 continue
             entry = save_capture(
-                data_dir, kind, body, active_project=get_active_project(cfg)
+                data_dir,
+                kind,
+                body,
+                active_project=get_active_project(cfg),
+                cfg=cfg,
             )
             console.print(f"[green]✓[/] {entry.type_label} → [dim]{entry.path.name}[/]")
             continue

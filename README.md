@@ -55,7 +55,18 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Estado
 
-**v0.5.0** — **Projeto ativo**: `projeto ativo: Revigor` filtra busca, recuperar e chat; novas capturas herdam o projeto.
+**v0.6.0** — **Busca semântica** (Ollama local): `semantico:`, `!indexar`, índice em `data/embeddings/`. Ative em `config.json` → `features.semantic_search`.
+
+```powershell
+ollama pull nomic-embed-text
+# config: "semantic_search": true
+.\run.ps1
+!semantico on
+!indexar
+semantico: funil de conversão
+```
+
+**v0.5.0** — Projeto ativo filtra busca, recuperar e chat.
 
 **v0.4.0** — Recuperar: intenção, `recuperar:`, fontes no chat.
 

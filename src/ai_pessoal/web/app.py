@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 
 from ai_pessoal.capture import list_captures, parse_capture_line, save_capture, search_captures
 from ai_pessoal.chat import run_chat
-from ai_pessoal.config import get_active_project, load_config, resolve_project, set_active_project
+from ai_pessoal.config import (
+    get_active_project,
+    is_semantic_enabled,
+    load_config,
+    resolve_project,
+    set_active_project,
+)
+from ai_pessoal.semantic import index_all, semantic_search
 from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
 from ai_pessoal.relate import format_related_markdown, gather_related
@@ -18,7 +25,7 @@ from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.5.0")
+app = FastAPI(title="AI-Pessoal", version="0.6.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -55,6 +62,8 @@ def api_health():
         "data_dir": str(data_dir),
         "model": cfg["ollama"]["model_default"],
         "active_project": get_active_project(cfg),
+        "semantic_search": is_semantic_enabled(cfg),
+        "embed_model": cfg.get("semantic", {}).get("embed_model", "nomic-embed-text"),
     }
 
 
@@ -85,7 +94,11 @@ def api_capture(body: CaptureIn):
     kind, text = parsed
     cfg, data_dir = load_config()
     entry = save_capture(
-        data_dir, kind, text, active_project=get_active_project(cfg)
+        data_dir,
+        kind,
+        text,
+        active_project=get_active_project(cfg),
+        cfg=cfg,
     )
     return {"ok": True, "id": entry.id, "type": entry.type_label}
 
@@ -94,11 +107,35 @@ def api_capture(body: CaptureIn):
 def api_search(q: str = "", project: str = ""):
     cfg, data_dir = load_config()
     proj = resolve_project(cfg, project or None)
-    hits = search_captures(data_dir, q, project=proj, limit=25)
-    return [
-        {"id": e.id, "type": e.type_label, "body": e.body, "created": e.created.isoformat()}
-        for e in hits
-    ]
+    seen: set[str] = set()
+    out: list[dict] = []
+    if is_semantic_enabled(cfg) and q:
+        for s in semantic_search(data_dir, cfg, q, limit=15, project=proj):
+            seen.add(s.entry.id)
+            out.append(
+                {
+                    "id": s.entry.id,
+                    "type": s.entry.type_label,
+                    "body": s.entry.body,
+                    "created": s.entry.created.isoformat(),
+                    "score": round(s.score, 3),
+                    "semantic": True,
+                }
+            )
+    for e in search_captures(data_dir, q, project=proj, limit=25):
+        if e.id in seen:
+            continue
+        seen.add(e.id)
+        out.append(
+            {
+                "id": e.id,
+                "type": e.type_label,
+                "body": e.body,
+                "created": e.created.isoformat(),
+                "semantic": False,
+            }
+        )
+    return out
 
 
 @app.get("/api/profile")
@@ -156,7 +193,11 @@ def api_set_active_project(body: ActiveProjectIn):
 def api_recover(q: str = "", limit: int = 15):
     cfg, data_dir = load_config()
     entries, intent = retrieve_for_query(
-        data_dir, q, limit=min(limit, 50), active_project=get_active_project(cfg)
+        data_dir,
+        q,
+        limit=min(limit, 50),
+        active_project=get_active_project(cfg),
+        cfg=cfg,
     )
     return {
         "markdown": format_retrieval_markdown(entries, intent),
@@ -170,6 +211,38 @@ def api_recover(q: str = "", limit: int = 15):
             for e in entries
         ],
     }
+
+
+@app.post("/api/semantic/index")
+def api_semantic_index():
+    cfg, data_dir = load_config()
+    if not is_semantic_enabled(cfg):
+        raise HTTPException(400, "semantic_search desativado em config.json")
+    ok, total = index_all(data_dir, cfg)
+    return {"indexed": ok, "total": total}
+
+
+@app.get("/api/semantic/search")
+def api_semantic_search(q: str = "", limit: int = 15):
+    cfg, data_dir = load_config()
+    if not is_semantic_enabled(cfg):
+        raise HTTPException(400, "semantic_search desativado")
+    hits = semantic_search(
+        data_dir,
+        cfg,
+        q,
+        limit=min(limit, 30),
+        project=get_active_project(cfg),
+    )
+    return [
+        {
+            "id": s.entry.id,
+            "type": s.entry.type_label,
+            "body": s.entry.body,
+            "score": round(s.score, 3),
+        }
+        for s in hits
+    ]
 
 
 @app.post("/api/chat")

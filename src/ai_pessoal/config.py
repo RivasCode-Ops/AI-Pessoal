@@ -33,7 +33,27 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "context": {
         "active_project": None,
     },
+    "semantic": {
+        "embed_model": "nomic-embed-text",
+        "min_score": 0.35,
+        "max_results": 12,
+    },
 }
+
+
+def is_semantic_enabled(cfg: dict[str, Any]) -> bool:
+    return bool(cfg.get("features", {}).get("semantic_search", False))
+
+
+def set_semantic_search(data_dir: Path, enabled: bool) -> dict[str, Any]:
+    config_path = data_dir / "config.json"
+    cfg = json.loads(config_path.read_text(encoding="utf-8"))
+    cfg.setdefault("features", {})["semantic_search"] = enabled
+    config_path.write_text(
+        json.dumps(cfg, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    return cfg
 
 
 def get_active_project(cfg: dict[str, Any]) -> str | None:
@@ -79,7 +99,7 @@ def resolve_data_dir(cfg: dict[str, Any]) -> Path:
 
 
 def ensure_data_layout(data_dir: Path) -> None:
-    for sub in ("capture", "sessions", "memory", "links"):
+    for sub in ("capture", "sessions", "memory", "links", "embeddings"):
         (data_dir / "data" / sub).mkdir(parents=True, exist_ok=True)
 
 

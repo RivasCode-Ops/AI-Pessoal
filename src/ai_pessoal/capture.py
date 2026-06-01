@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
+from typing import Any
 
 # Semana 1: nota, ideia, decisão. Semana 3+: demais tipos já aceitos na captura.
 CAPTURE_TYPES = frozenset(
@@ -101,6 +102,7 @@ def save_capture(
     body: str,
     *,
     active_project: str | None = None,
+    cfg: dict[str, Any] | None = None,
 ) -> CaptureEntry:
     if kind not in CAPTURE_TYPES:
         raise ValueError(f"Tipo inválido: {kind}")
@@ -121,6 +123,10 @@ def save_capture(
     dest.write_text(frontmatter + clean_body + "\n", encoding="utf-8")
     entry = CaptureEntry(id=entry_id, type=kind, body=clean_body, created=now, path=dest)
     _apply_links_from_meta(data_dir, entry_id, extra)
+    if cfg is not None:
+        from ai_pessoal.semantic import try_index_after_save
+
+        try_index_after_save(data_dir, cfg, entry)
     return entry
 
 

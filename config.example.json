@@ -25,8 +25,13 @@
   },
   "features": {
     "long_term_memory": true,
-    "semantic_search": false,
+    "semantic_search": true,
     "reminders": false
+  },
+  "semantic": {
+    "embed_model": "nomic-embed-text",
+    "min_score": 0.35,
+    "max_results": 12
   },
   "context": {
     "active_project": null

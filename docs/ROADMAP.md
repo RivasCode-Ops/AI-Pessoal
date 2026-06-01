@@ -45,12 +45,16 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - `projeto ativo: Nome` / `!projeto` / web header
 - Filtra busca, recuperar, chat e capturas novas
 
-## v2 (próximo grande passo)
+## Compreender — semântica ✅ (v0.6.0)
 
-- PDFs + RAG
-- Busca semântica
-- “o que estudei sobre X?” (notas + docs + conversas)
-- API HTTP local (opcional)
+- Embeddings Ollama (`nomic-embed-text`)
+- Índice local `vectors.jsonl`
+- `semantico:` · `!indexar` · merge em busca/chat/recuperar
+
+## v2 (restante)
+
+- PDFs + RAG em documentos
+- “o que estudei sobre X?” com PDFs + conversas
 
 ## v3+ (só com coração sólido)
 

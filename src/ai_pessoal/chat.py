@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any  # noqa: TC003 — used in compose_system_prompt
 
 from ai_pessoal.config import get_active_project
 from ai_pessoal.memory import build_memory_context
@@ -19,6 +19,7 @@ def compose_system_prompt(
     entries: list[CaptureEntry] | None = None,
     intent: RetrievalIntent | None = None,
     active_project: str | None = None,
+    cfg: dict[str, Any] | None = None,
 ) -> str:
     blocks = [base.strip()]
     mem = build_memory_context(data_dir)
@@ -26,7 +27,11 @@ def compose_system_prompt(
         blocks.append(mem)
     if entries is None:
         entries, intent = retrieve_for_query(
-            data_dir, user_query, limit=8, active_project=active_project
+            data_dir,
+            user_query,
+            limit=8,
+            active_project=active_project,
+            cfg=cfg,
         )
     rel = format_context_block(entries, intent)
     if rel:
@@ -62,7 +67,7 @@ def run_chat(
 
     active = get_active_project(cfg)
     entries, intent = retrieve_for_query(
-        data_dir, user_text, limit=8, active_project=active
+        data_dir, user_text, limit=8, active_project=active, cfg=cfg
     )
     system = compose_system_prompt(
         base_system,
@@ -71,6 +76,7 @@ def run_chat(
         entries=entries,
         intent=intent,
         active_project=active,
+        cfg=cfg,
     )
     session.append("user", user_text)
     messages = [{"role": "system", "content": system}]

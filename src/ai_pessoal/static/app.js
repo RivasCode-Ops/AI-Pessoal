@@ -25,7 +25,8 @@ async function loadStatus() {
     const h = await api("/api/health");
     const ollama = h.ollama ? "Ollama OK" : "Ollama offline";
     const proj = h.active_project ? ` · projeto: ${h.active_project}` : "";
-    el("status").textContent = `${ollama} · ${h.model}${proj}`;
+    const sem = h.semantic_search ? " · semântica" : "";
+    el("status").textContent = `${ollama} · ${h.model}${proj}${sem}`;
     if (h.active_project) el("activeProject").value = h.active_project;
   } catch {
     el("status").textContent = "API indisponível — rode python -m ai_pessoal.web";
@@ -116,9 +117,20 @@ el("btnSearch").onclick = async () => {
   ul.innerHTML = "";
   items.forEach((it) => {
     const li = document.createElement("li");
-    li.innerHTML = `<strong>${it.type}</strong> ${it.body.slice(0, 100)}`;
+    const pct = it.score != null ? `${Math.round(it.score * 100)}% ` : "";
+    const tag = it.semantic ? "⌕ " : "";
+    li.innerHTML = `<strong>${tag}${pct}${it.type}</strong> ${it.body.slice(0, 100)}`;
     ul.appendChild(li);
   });
+};
+
+el("btnIndex").onclick = async () => {
+  try {
+    const r = await api("/api/semantic/index", { method: "POST" });
+    el("captureMsg").textContent = `✓ Índice: ${r.indexed}/${r.total}`;
+  } catch (e) {
+    el("captureMsg").textContent = e.message;
+  }
 };
 
 el("btnProfile").onclick = async () => {
