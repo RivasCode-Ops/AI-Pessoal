@@ -20,11 +20,13 @@ from ai_pessoal.ollama_client import OllamaError, embed_text
 class ScoredHit:
     hit_id: str
     score: float
-    source_type: str  # capture | document
+    source_type: str  # capture | document | session
     label: str
     text: str
     entry: CaptureEntry | None = None
     document: str | None = None
+    session_file: str | None = None
+    role: str | None = None
 
 
 # Compatibilidade com código que usa ScoredEntry
@@ -224,6 +226,27 @@ def search_index(
             )
             continue
 
+        if row_kind == "session":
+            source = str(row.get("source", ""))
+            role = str(row.get("role", ""))
+            text = str(row.get("text", ""))
+            sid = str(row.get("session_id", ""))[:12]
+            scored.append(
+                ScoredHit(
+                    hit_id=row_id,
+                    score=score,
+                    source_type="session",
+                    label=f"Conversa {sid} [{role}]",
+                    text=text,
+                    session_file=source,
+                    role=role,
+                )
+            )
+            continue
+
+        if row_kind != "capture":
+            continue
+
         path = capture_dir(data_dir) / f"{row_id}.md"
         if not path.exists():
             continue
@@ -275,15 +298,15 @@ def semantic_search(
 def format_hits_for_context(hits: list[ScoredHit], *, max_chars: int = 400) -> str:
     if not hits:
         return ""
-    lines = ["Trechos semânticos (capturas + PDFs):"]
+    lines = ["Trechos semânticos (capturas, PDFs, conversas):"]
     for h in hits:
         body = h.text.replace("\n", " ")
         if len(body) > max_chars:
             body = body[: max_chars - 3] + "..."
-        if h.source_type == "document":
-            lines.append(f"- [{h.label}] {body}")
-        else:
+        if h.source_type == "capture":
             lines.append(f"- [{h.label}] {body} (id: {h.hit_id})")
+        else:
+            lines.append(f"- [{h.label}] {body}")
     return "\n".join(lines)
 
 

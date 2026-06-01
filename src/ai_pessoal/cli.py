@@ -20,6 +20,7 @@ from ai_pessoal.config import (
     set_semantic_search,
 )
 from ai_pessoal.documents import documents_dir, index_all_documents, list_document_sources
+from ai_pessoal.session_index import index_all_sessions
 from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i, list_profile_entries, list_projects
 from ai_pessoal.ollama_client import OllamaError, health_check, list_models
@@ -58,7 +59,7 @@ def _help_text() -> str:
   !docs — listar PDFs na pasta
 
 [bold]Semântica[/] (Ollama nomic-embed-text)
-  !indexar — capturas + PDFs
+  !indexar — capturas + PDFs + conversas
   !semantico on | off
 
 [bold]Conversa[/]
@@ -316,8 +317,10 @@ def _cmd_indexar(cfg, data_dir) -> None:
     with console.status(f"[cyan]Indexando com {model}…[/]"):
         ok, total = index_all(data_dir, cfg)
         chunks, pdfs = index_all_documents(data_dir, cfg, force=True)
+        sess_msgs, sess_files = index_all_sessions(data_dir, cfg, force=True)
     console.print(
-        f"[green]✓[/] {ok}/{total} capturas · {chunks} trechos em {pdfs} PDF(s)."
+        f"[green]✓[/] {ok}/{total} capturas · {chunks} trechos/{pdfs} PDF · "
+        f"{sess_msgs} msgs/{sess_files} conversas."
     )
     console.print(f"[dim]PDFs: {documents_dir(data_dir)}[/]")
 

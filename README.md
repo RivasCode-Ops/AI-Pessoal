@@ -55,6 +55,8 @@ Interface web (opcional): `pip install -e ".[web]"` ou use `run-web.ps1`.
 
 ## Estado
 
+**v0.8.0** — **Conversas no índice semântico**: histórico JSONL entra em `!indexar`; busca e chat recuperam perguntas/respostas passadas.
+
 **v0.7.0** — **PDFs + RAG**: coloque `.pdf` em `~/.ai-pessoal/data/documents/`, rode `!indexar`. Busca e chat incluem trechos dos PDFs.
 
 ```powershell

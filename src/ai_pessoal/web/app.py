@@ -17,6 +17,7 @@ from ai_pessoal.config import (
     set_active_project,
 )
 from ai_pessoal.documents import index_all_documents, list_document_sources
+from ai_pessoal.session_index import index_all_sessions
 from ai_pessoal.semantic import index_all, search_index
 from ai_pessoal.memory import format_who_am_i
 from ai_pessoal.recover import format_retrieval_markdown, retrieve_for_query
@@ -26,7 +27,7 @@ from ai_pessoal.session import start_session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
-app = FastAPI(title="AI-Pessoal", version="0.7.0")
+app = FastAPI(title="AI-Pessoal", version="0.8.0")
 
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -136,6 +137,19 @@ def api_search(q: str = "", project: str = ""):
                         "document": s.document,
                     }
                 )
+            elif s.source_type == "session":
+                out.append(
+                    {
+                        "id": s.hit_id,
+                        "type": s.label,
+                        "body": s.text,
+                        "created": "",
+                        "score": round(s.score, 3),
+                        "semantic": True,
+                        "session": s.session_file,
+                        "role": s.role,
+                    }
+                )
     for e in search_captures(data_dir, q, project=proj, limit=25):
         if e.id in seen:
             continue
@@ -234,12 +248,15 @@ def api_semantic_index():
         raise HTTPException(400, "semantic_search desativado em config.json")
     ok, total = index_all(data_dir, cfg)
     chunks, pdfs = index_all_documents(data_dir, cfg, force=True)
+    sess_msgs, sess_files = index_all_sessions(data_dir, cfg, force=True)
     return {
         "indexed": ok,
         "total": total,
         "doc_chunks": chunks,
         "pdfs": pdfs,
         "pdf_files": list_document_sources(data_dir),
+        "session_messages": sess_msgs,
+        "session_files": sess_files,
     }
 
 

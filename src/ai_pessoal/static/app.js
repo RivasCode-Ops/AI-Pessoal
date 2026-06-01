@@ -127,7 +127,8 @@ el("btnSearch").onclick = async () => {
 el("btnIndex").onclick = async () => {
   try {
     const r = await api("/api/semantic/index", { method: "POST" });
-    el("captureMsg").textContent = `✓ ${r.indexed}/${r.total} capturas · ${r.doc_chunks} trechos PDF`;
+    el("captureMsg").textContent =
+      `✓ ${r.indexed}/${r.total} capturas · ${r.doc_chunks} PDF · ${r.session_messages} conversas`;
   } catch (e) {
     el("captureMsg").textContent = e.message;
   }

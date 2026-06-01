@@ -58,10 +58,15 @@ Cada item deve passar no teste: **ajuda a registrar, relacionar ou recuperar con
 - `!docs` · `!indexar` inclui PDFs
 - Chat/recuperar citam trechos de PDF
 
+## Conversas semânticas ✅ (v0.8.0)
+
+- Mensagens de sessão no índice (`sess:…`)
+- `!indexar` inclui `data/sessions/*.jsonl`
+
 ## v2 (restante)
 
-- Busca semântica em histórico de conversas (JSONL)
 - Integração Cortana (web → `aprendi:`)
+- Indexação incremental após cada mensagem (opcional)
 
 ## v3+ (só com coração sólido)
 

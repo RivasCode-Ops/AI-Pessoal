@@ -142,7 +142,7 @@ def retrieve_for_query(
         ):
             if hit.entry is not None:
                 add(hit.entry)
-            elif hit.source_type == "document":
+            elif hit.source_type in ("document", "session"):
                 doc_hits.append(hit)
 
     if project:
@@ -214,7 +214,8 @@ def format_retrieval_markdown(
         blocks.append(f"### {e.id} · {ts}\n\n{format_entry_detail(e)}")
     for h in docs:
         body = h.text.replace("\n", " ")
-        blocks.append(f"### {h.label} · {h.score:.0%}\n\n{body}")
+        kind = "PDF" if h.source_type == "document" else "Conversa"
+        blocks.append(f"### {kind}: {h.label} · {h.score:.0%}\n\n{body}")
     return title + "\n\n".join(blocks)
 
 
